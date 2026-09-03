@@ -79,6 +79,10 @@ export class PreferencesStore {
     }
   }
 
+  /**
+   * V1 P0: Pin is wired to ranking AND to the UI's secondary action
+   * surface (Pin on Action Panel). This is part of the release gate.
+   */
   async togglePin(itemId: string): Promise<boolean> {
     const next: Record<string, number> = { ...this.current.pins }
     if (next[itemId]) {
@@ -91,6 +95,12 @@ export class PreferencesStore {
     return Boolean(next[itemId])
   }
 
+  /**
+   * Optional surface, not part of V1 P0 gate. The store accepts hides
+   * for any third-party caller, but the V1 UI does not surface a
+   * Hide action. Kept on the PreferencesStore so the data path is
+   * stable for a future release that wants it.
+   */
   async setHide(itemId: string, hide: boolean): Promise<void> {
     const next: Record<string, true> = { ...this.current.hides }
     if (hide) next[itemId] = true
@@ -99,6 +109,11 @@ export class PreferencesStore {
     await this.persist()
   }
 
+  /**
+   * Optional surface, not part of V1 P0 gate. The matcher in
+   * ranking/fuzzy.ts still honors user aliases when present, but no
+   * UI ships in V1 to record them.
+   */
   async setAlias(itemId: string, alias: string): Promise<void> {
     const next: Record<string, string> = { ...this.current.aliases }
     if (alias.length === 0) delete next[itemId]
@@ -121,6 +136,11 @@ export class PreferencesStore {
     await this.persist()
   }
 
+  /**
+   * Optional surface, not part of V1 P0 gate. All shipped providers
+   * are active by default; the UI does not surface a per-provider
+   * toggle in V1.
+   */
   async setProviderEnabled(providerId: string, enabled: boolean): Promise<void> {
     const prev = this.current.providers[providerId] ?? { enabled: true, order: 0 }
     const next: Record<string, { enabled: boolean; order: number }> = {

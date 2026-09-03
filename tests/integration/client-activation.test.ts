@@ -1,9 +1,12 @@
 /**
  * Integration smoke test: activate client + mount UI under the
- * minimal DOM shim. We exercise the full activation path including
- * preferences load, provider registration, and palette open/close.
+ * minimal DOM shim.
  *
- * The shim is intentionally tiny — only the surface the palette uses.
+ * Verifies the V1 contract:
+ *   - capability probe reports the host surface
+ *   - palette mounts when shell.overlay is present
+ *   - palette DISABLES (no DOM mutation) when shell.overlay is absent
+ *   - dispose removes listeners + DOM
  */
 
 import '../dom-shim.ts'
@@ -13,15 +16,17 @@ import { activateClient, type ClientHandle } from '../../src/client/index.ts'
 import type { HostSurface } from '../../src/client/capabilities.ts'
 
 const fullHost: HostSurface = {
-  version: '0.1.2-alpha.3',
-  hasShellOverlaySlot: false, // forces fallback container path
+  version: '0.1.2-rc.1',
+  hasShellOverlaySlot: true,
   commands: {
     list: async () => [{ name: 'compact', description: 'Compact current session' }],
     find: async () => undefined,
     execute: async () => ({ kind: 'success' }),
   },
   sessions: {
-    list: async () => [{ id: 's1', title: 'Auth refactor', workspaceId: 'w1', updatedAt: Date.now() }],
+    list: async () => [
+      { id: 's1', title: 'Auth refactor', workspaceId: 'w1', updatedAt: Date.now() },
+    ],
     getCurrent: () => ({ id: 's1', workspaceId: 'w1' }),
     getCurrentWorkspace: () => ({ id: 'w1' }),
     open: async () => {},
@@ -35,19 +40,38 @@ async function waitForReady(handle: ClientHandle): Promise<void> {
   }
 }
 
-test('activateClient boots and exposes capability report', async () => {
-  const report: unknown[] = []
+test('activateClient mounts when shell.overlay is present', async () => {
   let client: ClientHandle | undefined
   try {
+    const overlayRoot = document.createElement('div')
+    overlayRoot.dataset['shellOverlayRoot'] = 'true'
     client = activateClient({
       host: fullHost,
-      onReady: (r) => report.push(r),
+      overlay: { shellOverlayRoot: overlayRoot },
     })
     await waitForReady(client)
     const r = client.capabilityReport()
     assert.equal(r!.commands, true)
     assert.equal(r!.sessions, true)
-    assert.equal(r!.shellOverlaySlot, false)
+    assert.equal(r!.shellOverlaySlot, true)
+    assert.equal(client.isMounted(), true)
+  } finally {
+    client?.dispose()
+  }
+})
+
+test('activateClient fails closed when shell.overlay is absent', async () => {
+  let client: ClientHandle | undefined
+  try {
+    const bodyChildrenBefore = document.body.children.length
+    client = activateClient({
+      host: fullHost,
+      overlay: { shellOverlayRoot: null },
+    })
+    await waitForReady(client)
+    assert.equal(client.isMounted(), false, 'palette must not mount without shell.overlay')
+    // No DOM mutation on document.body — release-blocker item 5.
+    assert.equal(document.body.children.length, bodyChildrenBefore)
   } finally {
     client?.dispose()
   }
@@ -56,14 +80,16 @@ test('activateClient boots and exposes capability report', async () => {
 test('dispose removes the host element', async () => {
   let client: ClientHandle | undefined
   try {
-    client = activateClient({ host: fullHost })
+    const overlayRoot = document.createElement('div')
+    client = activateClient({
+      host: fullHost,
+      overlay: { shellOverlayRoot: overlayRoot },
+    })
     await waitForReady(client)
-    const before = document.body.children.length
+    assert.equal(client.isMounted(), true)
     client.dispose()
-    // After dispose, body may have one fewer element (the host).
-    // We can't assert strict equality because the localStorage backend
-    // is shared across calls in the same test file.
-    assert.ok(document.body.children.length <= before)
+    // After dispose, overlayRoot has zero children.
+    assert.equal(overlayRoot.children.length, 0)
   } finally {
     client?.dispose()
   }

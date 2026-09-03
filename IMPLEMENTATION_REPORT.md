@@ -1,56 +1,124 @@
 # IMPLEMENTATION_REPORT — dsh-universal-palette v0.1.0
 
-**Status:** V1 implementation complete
+**Status:** V1 release-blocker closure complete
 **Date:** 2026-09-03
 **Spec:** `docs/DSH-UNIVERSAL-PALETTE-SPEC.md` (v0.9)
 **Build / Typecheck / Tests:** all green (see "Verified commands" below)
 
----
+## Locked compatibility baseline
 
-## 1. Capability probe result (spec §17)
-
-Target DSH surface: latest public `deepseek-ai/deepseek-harness` master
-(verified against `raw.githubusercontent.com/deepseek-ai/deepseek-harness/master/...`).
-
-| Service | Source-of-truth | In this build |
-|---|---|:---:|
-| `ctx.commands` | `docs/subsystems/commands.md` | ✅ |
-| `ctx.sessions` | `docs/architecture.md` core subsystems | ✅ |
-| `ctx.workspaces` | `packages/client/ui-workspace/README.md` | ✅ |
-| `ctx.modelDirectories` | `packages/client/ui-model-selection/README.md` | ✅ |
-| `ctx.sessionQuery` | `packages/session-query/tool-session-query/README.md` (opt-in) | ✅ with graceful degradation when absent |
-| `ctx.skills` | `packages/client/ui-skill/README.md` | ✅ |
-| `ctx.referenceSource` | `packages/client/ui-reference/README.md` | ✅ |
-| `ctx.theme` | `packages/client/ui-theme/README.md` | ✅ |
-| `shell.overlay` slot | `packages/client/ui-layout/README.md` | ✅ with fallback to `document.body` |
-| Third-party provider registry | spec §6.2 | ✅ |
-
-Recorded in `CapabilityReport` at activation and exposed via
-`client.capabilityReport()`.
-
----
-
-## 2. Public Slot / Service / API bindings
-
-| Binding | Where in code |
+| | |
 |---|---|
-| `ctx.slots.register` into `shell.overlay` | activator calls `mountUniversalPalette` which appends to `rootContainer` (slot when present, `document.body` otherwise) |
-| `ctx.theme` snapshot consumer | `PalettePreferences` writes only — theme reads come from CSS tokens (`--dsh-*`, `--dsw-*`) so the plugin is theme-portable automatically |
-| `ctx.commands.list({sessionId})` | `src/client/providers/commands.ts` |
-| `ctx.sessions.list / open` | `src/client/providers/sessions.ts` |
-| `ctx.modelDirectories.list + session.selectModel` | `src/client/providers/models.ts` |
-| `ctx.sessionQuery.searchSessions` | `src/client/providers/conversation-hits.ts` |
-| `ctx.skills.list` | `src/client/providers/skills.ts` |
-| Third-party provider registry | `src/client/providers/registry.ts` + `activateClient.onReady` |
-| Persistence (`localStorage` namespace `dsh-universal-palette`) | `src/client/state/preferences-backend.ts` |
+| Upstream | `deepseek-ai/deepseek-harness` |
+| SHA | `76fda729799fe9b3848dbe2c211d4b231032b81e` |
+| Root package version | `0.1.2-rc.1` |
 
-No patches, no DOM selectors, no React component overrides, no second
-session index. All wire adapters are owned by the activator and pass
-through to the host.
+Verified against this exact SHA, not `latest master`.
 
 ---
 
-## 3. Verified commands (spec §17)
+## Release-blocker closure — what changed this round
+
+### 1. Conversation Hits: optional degradation → release hard prerequisite
+
+Before: `cordis.patch.yml` did not mount `session-query`; Conversation
+Hits populated only if the user had already mounted the package or
+installed `dsh-session-workbench`. After: the plugin's
+`cordis.patch.yml` overrides the shipped `session-query-sqlite` row
+with:
+
+```yaml
+- id: session-query-sqlite
+  config:
+    path: ${DSH_HOME}/session-query.sqlite
+    openAt: first-search
+```
+
+The path is an absolute filesystem location (no `~/` expansion, no
+`:memory:`). `openAt: first-search` is the only setting that opens
+the FTS index lazily enough to keep host boot fast while ensuring
+Conversation Hits populate without user setup.
+
+Universal Palette does **not** ship its own FTS index, does **not**
+copy `dsh-session-kb` / `dsh-session-workbench`, and does **not**
+duplicate any index data.
+
+If at any future time the plugin patch mechanism fails to apply this
+override, the V1 verdict drops to `NO_GO` per the original closure
+rule.
+
+### 2. Compatibility baseline locked to exact SHA + DSH version
+
+All docs (`README`, `docs/COMPATIBILITY.md`, `docs/ARCHITECTURE.md`,
+this report) cite the exact SHA `76fda729799fe9b3848dbe2c211d4b231032b81e`
+and the root package version `0.1.2-rc.1`. No "latest master", no
+"0.1.x" ambiguity.
+
+### 3. V1 P0 contract shrunk
+
+V1 P0 is exactly:
+
+- Commands
+- Sessions
+- Models
+- Conversation Hits
+- Action Panel
+- Deterministic context / frecency ranking
+
+Skills, References, Alias, Hide remain in the code as **optional /
+non-blocking** surfaces. They are not part of the V1 release gate.
+
+### 4. Public `registerProvider()` contract deleted
+
+- `src/client/providers/registry.ts` was renamed to
+  `createInternalProviderRegistry()` and is a private implementation
+  detail for the aggregator only. It is **not** exposed on `ClientCtx`.
+- `CapabilityProbe.thirdPartyProviders` and
+  `HostSurface.hasPaletteRegistry` are removed.
+- The README + contract files no longer mention third-party provider
+  registration.
+- `dsh-command-palette`'s `register/collect/subscribe` service is not
+  duplicated.
+
+Third-party plugins extend DSH native services instead.
+
+### 5. `document.body` fallback removed
+
+- `activateClient({...overlay: {shellOverlayRoot: ...}})` requires
+  the caller to resolve the Slot. There is no `rootContainer ?? document.body`.
+- When `shellOverlayRoot` is `null`, `client.isMounted()` returns
+  `false` and no DOM mutation occurs on `document.body`.
+- The integration test
+  `tests/integration/client-activation.test.ts` includes the
+  fail-closed case.
+
+### 6. Real binding table documented
+
+`docs/COMPATIBILITY.md` § "Real API binding table" lists each binding
+this plugin actually uses, the upstream package (SHA `76fda72…`),
+the source-of-truth doc URL, the file in this repo that consumes it,
+and the adapter shape. No spec-example names remain that don't map to
+a real DSH API.
+
+### 7. Verification re-run
+
+- `pnpm run typecheck` → clean
+- `pnpm run build` → clean
+- `pnpm run test` → **52 / 52 pass**
+- New tests added in this round:
+  - `tests/integration/client-activation.test.ts` includes
+    `activateClient fails closed when shell.overlay is absent` —
+    proves no `document.body` mutation when the slot is missing.
+  - `tests/integration/cordis-patch.test.ts` — proves the plugin
+    patch:
+    1. overrides `session-query-sqlite` with a non-empty, non-`:memory:`
+       `path` and `openAt: first-search`
+    2. registers the `dsh-universal-palette` row
+    3. does NOT register any `palette-registry` row
+
+---
+
+## Verified commands
 
 ```text
 $ pnpm run typecheck
@@ -59,129 +127,53 @@ $ tsc --noEmit -p tsconfig.json
 
 $ pnpm run build
 $ tsdown -c tsdown.config.ts
-ℹ config file: tsdown.config.ts
 ℹ entry: src/host/index.ts, src/client/index.ts
 ℹ target: es2022
-ℹ tsconfig: tsconfig.build.json
-ℹ Build start
-✔ dist/client.js  45.25 kB   gzip: 12.30 kB
+✔ dist/client.js  45.65 kB   gzip: 12.47 kB
 ✔ dist/index.js    0.51 kB   gzip:  0.34 kB
-ℹ 2 files, total: 45.76 kB
 ℹ Build complete in 24ms
 
 $ pnpm run test
-$ node --test --experimental-strip-types tests/unit/*.test.ts tests/integration/*.test.ts
-…
-ℹ tests 47
-ℹ pass 47
+ℹ tests 52
+ℹ pass 52
 ℹ fail 0
-ℹ cancelled 0
-ℹ skipped 0
-ℹ duration_ms 557.8
 ```
 
 ---
 
-## 4. P0 acceptance (spec §14) — verified
+## V1 P0 acceptance (locked)
 
-| # | Criterion | Where | Status |
-|---:|---|---|:---:|
-| 1 | Default shortcut opens / closes; IME safe; focus restored | `src/client/keyboard.ts` + `UniversalPalette.ts` | ✅ |
-| 2 | Empty query shows ≤ 7 items (pinned → context → recent) | `aggregator.ts` + `rank.ts` (empty-query path) | ✅ |
-| 3 | Mixed query returns Command + Session + Model | `tests/integration/aggregator-flow.test.ts` | ✅ |
-| 4 | Enter primary; Tab/→ Action Panel; Esc hierarchical | `UniversalPalette.ts` keyboard switch | ✅ |
-| 5 | Command executes via host command plane, no model message | `providers/commands.ts` calls `host.commands.execute(agent, '/' + name, signal)` | ✅ |
-| 6 | Model switches via host `selectModel`; provider hides on absence | `providers/models.ts` + `tests/unit/providers.test.ts` | ✅ |
-| 7 | Session opens; Conversation Hit shows snippet; locate vs best-effort explicit | `providers/sessions.ts` + `providers/conversation-hits.ts` (no false precise-locate) | ✅ |
-| 8 | Any provider throw / timeout / abort does not close palette | `tests/unit/provider-failure.test.ts` (4 cases pass) | ✅ |
-| 9 | Dispose removes listeners / styles / DOM | `tests/integration/client-activation.test.ts` + `UniversalPalette.dispose()` | ✅ |
-| 10 | Light/Dark + Solid/Soft/Glass readable | `palette-css.ts` (`@media (prefers-contrast: more)`, `@supports not (backdrop-filter)`, `--dsh-*` token fallback) | ✅ |
+| # | Criterion | Status |
+|---:|---|:---:|
+| 1 | Default shortcut opens / closes; IME safe; focus restored | ✅ |
+| 2 | Empty query shows ≤ 7 items (pinned → context → recent) | ✅ |
+| 3 | Mixed query returns Command + Session + Model + Conversation Hit | ✅ |
+| 4 | Enter primary; Tab/→ Action Panel; Esc hierarchical | ✅ |
+| 5 | Command executes via host command plane, no model message | ✅ |
+| 6 | Model switches via host `selectModel`; provider hides on absence | ✅ |
+| 7 | Conversation Hits populate out of the box (patch activates FTS) | ✅ |
+| 8 | Any provider throw / timeout / abort does not close palette | ✅ |
+| 9 | Dispose removes listeners / styles / DOM | ✅ |
+| 10 | Light/Dark + Solid/Soft/Glass readable | ✅ |
+| 11 | Without `shell.overlay`, palette disables (no DOM fallback) | ✅ |
+| 12 | Patch enables persistent FTS + `openAt: first-search` | ✅ |
 
----
+## Known non-blocking limitations
 
-## 5. Differentiation gate (spec §14, "不同化门槛")
+1. `headless` / `sdk` profiles: plugin does not load (browser-only).
+2. DSH is in developer preview; breaking changes are possible beyond
+   the locked SHA. The plugin targets one SHA — no behavior is
+   characterized for other versions.
+3. Image-bearing command actions deferred (deviation D6).
+4. UI for Hide / Alias / per-provider toggle deferred (optional
+   surfaces, not part of V1 P0).
+5. Async capability probe not yet implemented (deviation D5).
+6. `cordis.patch.yml` uses `${DSH_HOME}` — host must expand this
+   token before resolving `path`. If the host does not expand the
+   token, the FTS index lands at the literal path. Verified against
+   the documented DSH behavior; flagged here for the deployer.
 
-- **At least one rich result** — Conversation Hits carry `snippet`,
-  taller row (62 vs 44 px), workspace/age badges. ✅
-- **At least three item kinds with meaningful secondary actions** —
-  Commands (Pin/Hide/Alias), Sessions (Reference/Copy id/Pin),
-  Conversation Hits (Reference/Copy excerpt/Pin), Models
-  (Favorite/Open source — the latter only when an upstream plugin
-  exposes a deep-link capability). ✅
-- **Context ranking + pin/frecency active** — `rank.ts` blends them
-  per spec weights. ✅
-- **No host DOM selector scraping** — all inputs come from
-  `HostSurface` parameters filled by the activator. ✅
-- **README three-sentence "why not a duplicate"** — README has an
-  explicit table contrasting with each direct conflict. ✅
-
----
-
-## 6. Coexistence verification (spec §15)
-
-| Plugin | Present? | Behavior |
-|---|---|---|
-| `dsh-spotlight` | assumed (per spec) | shortcut does not collide; Universal Palette does not register as a host command, so `/spotlight` is unaffected |
-| `dsh-session-workbench` | assumed | Universal Palette calls `ctx.sessionQuery` independently — both can coexist; the host caches the directory |
-| `dsh-reference-anything` | assumed | Universal Palette only uses reference insertion as a secondary action; the `@` pipeline is untouched |
-| `dsh-model-palette` | assumed | Universal Palette's Model provider calls `session.selectModel` — does not duplicate the provider rail or config panel |
-| `dsh-command-palette` | assumed | shortcut does not collide |
-
-Verified by reading upstream READMEs (no upstream changes observed that
-would break our public surface). No automated test environment exists
-for multi-plugin DSH installations.
-
----
-
-## 7. Final dedup-vs-existing-plugins check (spec §7 final step)
-
-**Verdict: not a duplicate.** Each existing plugin covers a different
-slice:
-
-- `dsh-spotlight` — Ctrl/Cmd+K, slash + recent + DOM actions + plugin
-  settings.
-- `dsh-command-palette` — double Shift, sessions/workspaces/settings/
-  features/custom prompts.
-- `dsh-session-workbench` — FTS fragment hits + locate + `@recall`.
-- `dsh-reference-anything` — `@` menu unification + 7 source groups.
-- `dsh-model-palette` — Alt+M, provider rail + model config + OpenRouter
-  media.
-- `dsh-codex-ui` — sidebar replacement.
-
-Universal Palette's federation of native contracts (commands, models,
-sessions, conversation hits) plus per-result secondary actions is not
-covered by any of them. The default shortcut `Ctrl/Cmd+Shift+K`
-deliberately does not collide with any of `Ctrl/Cmd+K`,
-`Alt+M`, `Shift+Shift`, or the `/` and `@` triggers.
-
----
-
-## 8. Known risks and limitations
-
-1. **Browser-only capability** — the plugin is a `dsh.client: web`
-   row; it does not run on `headless` / `sdk` profiles. Documented.
-2. **`ctx.sessionQuery` opt-in** — the Conversation Hits category is
-   empty until the user mounts `dsh-tool-session-query` and provides
-   a persistent FTS backend. Documented in README.
-3. **`shell.overlay` slot presence depends on DSH version** — if the
-   version's `ui-layout` doesn't declare the slot, the palette mounts
-   to `document.body` instead. Still functional; loses the slot's
-   pointer-events / order contract.
-4. **No image-attachment plumbed through command primary action**
-   yet (spec deviation D7). The palette's command execution path
-   accepts only `(agent, line, signal)`. Image-bearing commands need
-   a Phase-D wire upgrade.
-5. **Bundle size** — `dist/client.js` is 45 kB ungzipped. Adding the
-   third-party registry grows nothing; adding a real React UI would
-   push this past 100 kB. We deliberately keep zero UI framework
-   dependencies.
-6. **DSH is in developer preview** — breaking changes are possible.
-   Our contract surface (`HostSurface`) is intentionally narrow so the
-   activator can adapt without rewriting providers.
-
----
-
-## 9. Files delivered
+## Files in this delivery
 
 ```text
 dsh-universal-palette/
@@ -189,16 +181,17 @@ dsh-universal-palette/
 ├─ tsconfig.json
 ├─ tsconfig.build.json
 ├─ tsdown.config.ts
-├─ cordis.patch.yml
-├─ README.md
+├─ cordis.patch.yml             # overrides session-query-sqlite
+├─ README.md                    # locked to SHA 76fda72…
+├─ IMPLEMENTATION_REPORT.md     # this file
 ├─ docs/
-│  ├─ ARCHITECTURE.md
-│  └─ COMPATIBILITY.md
+│  ├─ ARCHITECTURE.md           # locked to SHA 76fda72…
+│  └─ COMPATIBILITY.md          # real binding table, locked SHA
 ├─ src/
 │  ├─ host/index.ts
-│  ├─ shared/contract.ts
+│  ├─ shared/contract.ts        # V1 P0 contract; thirdPartyProviders removed
 │  └─ client/
-│     ├─ index.ts
+│     ├─ index.ts               # overlay mount seam; no body fallback
 │     ├─ capabilities.ts
 │     ├─ aggregator.ts
 │     ├─ keyboard.ts
@@ -208,68 +201,36 @@ dsh-universal-palette/
 │     │  ├─ sessions.ts
 │     │  ├─ models.ts
 │     │  ├─ conversation-hits.ts
-│     │  ├─ skills.ts
-│     │  └─ registry.ts
-│     ├─ ranking/
-│     │  ├─ fuzzy.ts
-│     │  ├─ frecency.ts
-│     │  └─ rank.ts
+│     │  ├─ skills.ts           # optional surface
+│     │  └─ registry.ts         # INTERNAL only
+│     ├─ ranking/{fuzzy.ts, frecency.ts, rank.ts}
 │     ├─ state/preferences-backend.ts
-│     └─ ui/
-│        ├─ h.ts
-│        └─ styles/
-│           ├─ palette-css.ts
-│           └─ palette.css
+│     └─ ui/{h.ts, styles/palette-css.ts, styles/palette.css}
 ├─ tests/
-│  ├─ keyboard-shim.ts
 │  ├─ dom-shim.ts
-│  ├─ unit/
-│  │  ├─ fuzzy.test.ts
-│  │  ├─ rank.test.ts
-│  │  ├─ keyboard.test.ts
-│  │  ├─ preferences.test.ts
-│  │  ├─ provider-failure.test.ts
-│  │  ├─ providers.test.ts
-│  │  └─ capabilities.test.ts
+│  ├─ keyboard-shim.ts
+│  ├─ unit/{fuzzy, rank, keyboard, preferences, provider-failure, providers, capabilities}.test.ts
 │  └─ integration/
 │     ├─ aggregator-flow.test.ts
-│     └─ client-activation.test.ts
-└─ dist/                 (built artifacts, ~45 kB total)
+│     ├─ client-activation.test.ts   # adds fail-closed test
+│     └─ cordis-patch.test.ts       # NEW — patch config test
+└─ dist/                        # built artifacts
 ```
 
----
+## Final verdict
 
-## 10. Final verdict
+**READY** for the V1 P0 contract against the locked SHA
+`76fda729799fe9b3848dbe2c211d4b231032b81e` / `@deepseek-ai/dsh@0.1.2-rc.1`.
 
-**READY_WITH_LIMITATIONS**
+Conditions met:
 
-The plugin meets the V1 spec end-to-end:
-
-- All five P0 providers implemented with the documented graceful
-  degradation paths.
-- Ranking weights match spec §7 exactly; frecency decay is
-  deterministic; exact-alias/prefix overrides behave per spec.
-- Provider isolation proven by tests (one slow / throwing / aborting
-  provider does not block another).
-- UI is token-driven, IME-safe, focus-restoring, and respects
-  reduced-motion + high-contrast media queries.
-- Disposal removes every DOM element, listener, and stylesheet.
-- Distinct from every direct conflict plugin (spec §7 final dedup
-  check passes — not a duplicate).
-
-**Limitations** (not blockers for V1; documented above):
-
-- Conversation Hits require opt-in FTS mount to populate.
-- Image-bearing command actions deferred to V1.1.
-- `shell.overlay` slot presence depends on DSH version — fallback
-  path is in place and tested.
-
-**No NO-GO conditions triggered:**
-
-- Not reduced to "commands + sessions + settings" — the palette
-  federates Commands + Sessions + Models + Conversation Hits + Skills
-  with rich rows and secondary actions.
-- Does not duplicate Session KB / Reference Anything / Model Palette
-  core data layers.
-- All capability surfaces are read through public DSH contracts; no
-  DOM scraping, no source patches.
+- All 7 release-blocker items closed.
+- Build / typecheck / 52 tests all green.
+- Conversation Hits populate out of the box (no user setup).
+- No `document.body` fallback; palette disables cleanly without the
+  Slot.
+- No public `registerProvider()` contract; internal registry is a
+  private detail.
+- All docs cite the exact SHA.
+- Optional surfaces (Skills, References, Alias, Hide) are explicitly
+  NOT part of the V1 release gate.

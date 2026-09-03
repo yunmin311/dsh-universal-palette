@@ -4,6 +4,10 @@
  * This runs once at activation and the report is exposed via
  * `useCapabilities()`. Every provider reuses the same probe result so
  * we never re-probe during a query lifecycle.
+ *
+ * The V1 P0 set is Commands + Sessions + Models + Conversation Hits.
+ * Skills / References are detected but their providers are optional
+ * (not part of the V1 release gate).
  */
 
 import type { CapabilityReport } from '../shared/contract.ts'
@@ -14,12 +18,14 @@ export interface CapabilityProbe {
   sessions: SessionCapability | null
   workspaces: WorkspaceCapability | null
   modelDirectory: ModelDirectoryCapability | null
+  /** Conversation Hits (P0). Empty unless `cordis.patch.yml` enables the FTS row. */
   sessionQuery: SessionQueryCapability | null
+  /** Optional surface, not part of V1 P0 gate. */
   skills: SkillCapability | null
+  /** Optional surface, not part of V1 P0 gate. */
   referenceSource: ReferenceCapability | null
   theme: ThemeCapability | null
   shellOverlaySlot: boolean
-  thirdPartyProviders: boolean
   dshVersion: string
 }
 
@@ -161,13 +167,11 @@ export function probe(host: HostSurface): CapabilityProbe {
     referenceSource: null,
     theme: null,
     shellOverlaySlot: false,
-    thirdPartyProviders: false,
     dshVersion: DEFAULT_VERSION,
   }
 
   if (host.version) probe.dshVersion = host.version
   probe.shellOverlaySlot = host.hasShellOverlaySlot ?? false
-  probe.thirdPartyProviders = host.hasPaletteRegistry ?? false
 
   const commands = host.commands
   if (commands) {
@@ -236,7 +240,6 @@ export function probe(host: HostSurface): CapabilityProbe {
 export interface HostSurface {
   readonly version?: string
   readonly hasShellOverlaySlot?: boolean
-  readonly hasPaletteRegistry?: boolean
 
   readonly commands?: {
     readonly list: (agent: unknown) => Promise<readonly CommandDescriptorView[]>
@@ -292,6 +295,5 @@ export function capabilityReport(probe: CapabilityProbe): CapabilityReport {
     skills: probe.skills !== null,
     referenceSource: probe.referenceSource !== null,
     theme: probe.theme !== null,
-    thirdPartyProviders: probe.thirdPartyProviders,
   }
 }

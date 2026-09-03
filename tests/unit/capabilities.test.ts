@@ -3,6 +3,9 @@
  *
  * Spec §13 Phase A: the probe must record what is actually present and
  * providers must opt out of missing services.
+ *
+ * V1 P0 set: Commands + Sessions + Models + Conversation Hits +
+ * shellOverlaySlot. Skills / References are detected but optional.
  */
 
 import { test } from 'node:test'
@@ -22,18 +25,27 @@ test('capability report with no services marks everything false', () => {
   assert.equal(report.referenceSource, false)
   assert.equal(report.theme, false)
   assert.equal(report.shellOverlaySlot, false)
-  assert.equal(report.thirdPartyProviders, false)
 })
 
 test('capability report records version when present', () => {
-  const host: HostSurface = { version: '0.1.2-alpha.3' }
+  const host: HostSurface = { version: '0.1.2-rc.1' }
   const report = capabilityReport(probe(host))
-  assert.equal(report.dshVersion, '0.1.2-alpha.3')
+  assert.equal(report.dshVersion, '0.1.2-rc.1')
 })
 
-test('capability report flags overlay slot + registry when host has them', () => {
-  const host: HostSurface = { hasShellOverlaySlot: true, hasPaletteRegistry: true }
+test('capability report flags shell.overlay when host has it', () => {
+  const host: HostSurface = { hasShellOverlaySlot: true }
   const report = capabilityReport(probe(host))
   assert.equal(report.shellOverlaySlot, true)
-  assert.equal(report.thirdPartyProviders, true)
+})
+
+test('capability report marks sessionQuery true when session_query host surface is wired', () => {
+  const host: HostSurface = {
+    sessionQuery: {
+      searchSessions: async () => [],
+      searchEvents: async () => [],
+    },
+  }
+  const report = capabilityReport(probe(host))
+  assert.equal(report.sessionQuery, true)
 })

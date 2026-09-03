@@ -24,7 +24,6 @@ const noProbe: CapabilityProbe = {
   referenceSource: null,
   theme: null,
   shellOverlaySlot: false,
-  thirdPartyProviders: false,
   dshVersion: 'test',
 }
 

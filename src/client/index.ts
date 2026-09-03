@@ -5,14 +5,21 @@
  *   1. running the capability probe
  *   2. instantiating the providers that the probe supports
  *   3. building the aggregator + preferences store
- *   4. mounting the UniversalPalette into `shell.overlay` if available
- *   5. registering the third-party `paletteRegistry` service into ctx
- *   6. returning a cleanup disposer for HMR / plugin unload
+ *   4. mounting the UniversalPalette ONLY through the public
+ *      `shell.overlay` Slot system. If the slot is not declared in
+ *      this DSH version, the activator fails closed — palette disabled,
+ *      capability report still exposed for diagnostics. There is no
+ *      `document.body` fallback (release-blocker closure, item 5).
+ *   5. returning a cleanup disposer for HMR / plugin unload
  *
- * Implementation note: the activator never throws if the DSH contract
- * is incomplete. Any missing service drops a provider (degrades
- * silently). The overlay mount degrades to a no-op when the slot is
- * absent — spec §8.2.
+ * The activator does NOT expose a public registerProvider() contract.
+ * Third-party plugins extend DSH native services instead. The internal
+ * `paletteRegistry` exists only as a private implementation detail for
+ * the aggregator (release-blocker closure, item 4).
+ *
+ * Provider registration order matches the V1 P0 priority:
+ *   Commands + Sessions + Models + Conversation Hits.
+ * Skills + References remain available but are optional surfaces.
  */
 
 import { mountUniversalPalette, type UniversalPaletteHandle } from './UniversalPalette.ts'
@@ -25,21 +32,37 @@ import { createSessionsProvider } from './providers/sessions.ts'
 import { createModelsProvider } from './providers/models.ts'
 import { createConversationHitsProvider } from './providers/conversation-hits.ts'
 import { createSkillsProvider } from './providers/skills.ts'
-import { createPaletteRegistry, type PaletteRegistry } from './providers/registry.ts'
+import { createInternalProviderRegistry } from './providers/registry.ts'
 import type { CapabilityReport, PaletteProvider } from '../shared/contract.ts'
+
+export interface OverlayMount {
+  /**
+   * Mount the palette root element through the DSH public Slot system.
+   * Returns the element the activator should append its DOM root to.
+   * Implementations MUST resolve through `ctx.slots` + the `shell.overlay`
+   * child slot — never `document.body`, never a hard-coded selector.
+   */
+  readonly shellOverlayRoot: HTMLElement | null
+}
 
 export interface ClientCtx {
   readonly host: HostSurface
-  /** DOM container for fallback mount when shell.overlay is unavailable. */
-  readonly fallbackContainer?: HTMLElement | null
+  /**
+   * The activator hands the overlay mount seam to Universal Palette.
+   * The activator (test or production) resolves this from `ctx.slots`.
+   * If `shellOverlayRoot` is null, the palette is disabled.
+   */
+  readonly overlay: OverlayMount
   /** Optional exposed capability report (used by tests + diagnostics). */
-  readonly onReady?: (report: CapabilityReport, registry: PaletteRegistry) => void
+  readonly onReady?: (report: CapabilityReport) => void
 }
 
 export interface ClientHandle {
   dispose(): void
   isReady(): boolean
   capabilityReport(): CapabilityReport | null
+  /** True when the palette UI mounted; false when shell.overlay was absent. */
+  isMounted(): boolean
 }
 
 export function activateClient(ctx: ClientCtx): ClientHandle {
@@ -52,7 +75,10 @@ export function activateClient(ctx: ClientCtx): ClientHandle {
   const preferences = new PreferencesStore(preferencesBackend)
 
   void preferences.load().then(() => {
-    const registry = createPaletteRegistry()
+    // Internal registry: private implementation detail. NOT exposed as
+    // a public API on ClientCtx.
+    const internalRegistry = createInternalProviderRegistry()
+
     const providers: PaletteProvider[] = []
     const c = createCommandsProvider(capabilities)
     const s = createSessionsProvider(capabilities)
@@ -64,6 +90,7 @@ export function activateClient(ctx: ClientCtx): ClientHandle {
     if (m) providers.push(m)
     if (h) providers.push(h)
     if (sk) providers.push(sk)
+    for (const p of providers) internalRegistry.add(p)
 
     const aggregator = new PaletteAggregator({
       providers,
@@ -71,15 +98,23 @@ export function activateClient(ctx: ClientCtx): ClientHandle {
       capabilityProbe: capabilities,
     })
 
-    handle = mountUniversalPalette({
-      aggregator,
-      preferences,
-      rootContainer: ctx.fallbackContainer ?? (typeof document !== 'undefined' ? document.body : null),
-    })
+    const rootContainer = ctx.overlay.shellOverlayRoot
+    if (rootContainer) {
+      handle = mountUniversalPalette({
+        aggregator,
+        preferences,
+        rootContainer,
+      })
+    } else {
+      // Fail closed: no shell.overlay, no DOM fallback (release-blocker
+      // closure, item 5). Capability providers are still constructed
+      // so diagnostics can inspect what would have been available.
+      handle = null
+    }
 
     ready = true
     if (ctx.onReady) {
-      ctx.onReady(report, registry)
+      ctx.onReady(report)
     }
   })
 
@@ -93,6 +128,7 @@ export function activateClient(ctx: ClientCtx): ClientHandle {
       if (!report) throw new Error('capability report not initialized')
       return report
     },
+    isMounted: () => handle !== null,
   }
 }
 

@@ -21,7 +21,6 @@ import type { CapabilityProbe } from '../../src/client/capabilities.ts'
 const fullProbe: CapabilityProbe = {
   dshVersion: 'test',
   shellOverlaySlot: true,
-  thirdPartyProviders: true,
   commands: {
     list: async () => [
       { name: 'compact', description: 'Compact current session' },

@@ -1,30 +1,29 @@
 /**
- * Third-party provider registry (spec §6.2).
+ * Internal provider registry.
  *
- * Public contract: any plugin can call `registerProvider(provider)` to
- * contribute PaletteItems without owning a DSH command. This is the
- * ONLY surface we expose to third parties in V1 — we deliberately do
- * not build an SDK (spec §6.2: "V1 only: register, unregister, collect,
- * optional invalidate subscription").
+ * NOT a public extension surface. V1 federates only the DSH-native
+ * capability set (Commands, Sessions, Models, Conversation Hits);
+ * third-party plugins MUST add their own capabilities by registering
+ * native DSH services (commands, etc.). Universal Palette does not
+ * ship a public registerProvider() API in V1 — that contract was
+ * deliberately removed during release-blocker closure to avoid
+ * duplicating `dsh-command-palette`'s register/collect/subscribe
+ * service surface.
  *
- * Provider isolation (spec §3): each provider's failure surfaces
- * independently. The aggregator wraps `collect()` in a try/catch and
- * treats thrown errors as zero-result for that provider.
+ * Provider isolation is enforced by the aggregator: each provider's
+ * `collect()` is wrapped in a try/catch and treated as zero-result on
+ * throw / abort / timeout (see `aggregator.ts`).
  */
 
-import type {
-  PaletteProvider,
-} from '../../shared/contract.ts'
+import type { PaletteProvider } from '../../shared/contract.ts'
 
-export interface PaletteRegistry {
-  register(provider: PaletteProvider): () => void
+export function createInternalProviderRegistry(): {
+  add(provider: PaletteProvider): () => void
   list(): readonly PaletteProvider[]
-}
-
-export function createPaletteRegistry(): PaletteRegistry {
+} {
   const providers = new Set<PaletteProvider>()
   return {
-    register(provider) {
+    add(provider) {
       providers.add(provider)
       return () => {
         providers.delete(provider)

@@ -1,25 +1,44 @@
 # cordis.patch.yml — DSH Web profile patch for dsh-universal-palette
 #
-# Adds the `dsh-universal-palette` plugin row to the shipped `web` profile.
-# The plugin owns:
-#   * one host-side empty apply (no host services; all capability lives in the
-#     browser half, matching the DSH architecture split documented at
-#     docs/architecture.md and the dsh-session-workbench reference pattern).
-#   * one browser-half entry that registers the `shell.overlay` slot child and
-#     wires the `paletteRegistry` service other client plugins can extend
-#     (spec §6.2: third-party provider contract).
+# Verified against exact upstream SHA:
+#   deepseek-ai/deepseek-harness @ 76fda729799fe9b3848dbe2c211d4b231032b81e
+#   @deepseek-ai/dsh root package version: 0.1.2-rc.1
 #
-# The plugin deliberately does NOT mount `dsh-tool-session-query`; it is
-# opt-in (per packages/session-query/tool-session-query/README.md). When
-# session_query is present in the host composition, the conversation-hits
-# provider activates; when absent, the provider degrades silently.
+# This patch is consumed by `dsh plugin --profile web add .` and composed
+# on top of the active profile's `cordis.patch.yml`. Rows here override
+# shipped rows by id; new rows add to the composition.
 #
-# This file is consumed by `dsh plugin --profile web add .` (per
-# packages/client/modules/README.md / dsh-spotlight reference).
+# Three things this patch does:
 #
-# The `inject: [ui-layout]` edge forces our browser half to load after
-# ui-layout so the `shell.overlay` child slot is declared before we
-# register into it (slot-system standard).
+#   1. Activates the shipped `dsh-session-query-sqlite` row by overriding
+#      its config so the FTS index is persistent and opened on first
+#      search. The shipped default is `openAt: never` (see
+#      dsh-session-workbench README and the upstream `session-query`
+#      package), which means Conversation Hits would otherwise be empty
+#      out of the box. Universal Palette requires Conversation Hits as
+#      a release hard prerequisite (item 1 of release-blocker closure),
+#      so we enable the index here.
+#
+#   2. The path resolves to a stable per-home location. We deliberately
+#      do NOT use `:memory:` (which would force rebuild-on-every-search
+#      and block the host on large sessions). We also do NOT use `~/`
+#      expansion — the host resolves it with `path.resolve` and the
+#      un-expanded form silently lands inside the DSH dependency tree
+#      on upgrade.
+#
+#   3. Adds the `dsh-universal-palette` row itself (the plugin body;
+#      empty config — the browser half owns the surface).
 
+# Override the shipped session-query-sqlite config so the persistent
+# FTS index opens on the first search. The `path` is an absolute
+# filesystem path under the DSH home; users may edit it after install
+# but the default below is safe and deterministic.
+- id: session-query-sqlite
+  config:
+    path: ${DSH_HOME}/session-query.sqlite
+    openAt: first-search
+
+# The plugin row. The browser half declares the shell.overlay child
+# slot dependency via `dsh.client.inject: [ui-layout]` in package.json.
 - id: dsh-universal-palette
   config: {}
