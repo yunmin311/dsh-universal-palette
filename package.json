@@ -1,0 +1,46 @@
+{
+  "name": "dsh-universal-palette",
+  "version": "0.1.0",
+  "description": "Dense translucent-glass Universal Palette for DeepSeek Harness Web: federates Commands, Models, Sessions, Conversation Hits, Skills, References into one keyboard-first surface with rich-item secondary actions.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./client": "./dist/client.js"
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml",
+    "src",
+    "docs"
+  ],
+  "scripts": {
+    "build": "tsdown -c tsdown.config.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test --experimental-strip-types tests/unit/*.test.ts tests/integration/*.test.ts",
+    "test:unit": "node --test --experimental-strip-types tests/unit/*.test.ts",
+    "test:integration": "node --test --experimental-strip-types tests/integration/*.test.ts",
+    "check": "pnpm run typecheck && pnpm run test"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "ui-layout"
+      ]
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsdown": "^0.22.14",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

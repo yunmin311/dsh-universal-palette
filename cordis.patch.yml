@@ -1,0 +1,25 @@
+# cordis.patch.yml — DSH Web profile patch for dsh-universal-palette
+#
+# Adds the `dsh-universal-palette` plugin row to the shipped `web` profile.
+# The plugin owns:
+#   * one host-side empty apply (no host services; all capability lives in the
+#     browser half, matching the DSH architecture split documented at
+#     docs/architecture.md and the dsh-session-workbench reference pattern).
+#   * one browser-half entry that registers the `shell.overlay` slot child and
+#     wires the `paletteRegistry` service other client plugins can extend
+#     (spec §6.2: third-party provider contract).
+#
+# The plugin deliberately does NOT mount `dsh-tool-session-query`; it is
+# opt-in (per packages/session-query/tool-session-query/README.md). When
+# session_query is present in the host composition, the conversation-hits
+# provider activates; when absent, the provider degrades silently.
+#
+# This file is consumed by `dsh plugin --profile web add .` (per
+# packages/client/modules/README.md / dsh-spotlight reference).
+#
+# The `inject: [ui-layout]` edge forces our browser half to load after
+# ui-layout so the `shell.overlay` child slot is declared before we
+# register into it (slot-system standard).
+
+- id: dsh-universal-palette
+  config: {}
