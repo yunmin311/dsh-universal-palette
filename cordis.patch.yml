@@ -13,18 +13,27 @@
 #   1. Activates the shipped `dsh-session-query-sqlite` row by overriding
 #      its config so the FTS index is persistent and opened on first
 #      search. The shipped default is `openAt: never` (see
-#      dsh-session-workbench README and the upstream `session-query`
-#      package), which means Conversation Hits would otherwise be empty
-#      out of the box. Universal Palette requires Conversation Hits as
-#      a release hard prerequisite (item 1 of release-blocker closure),
-#      so we enable the index here.
+#      `packages/bundle/base/cordis.patch.yml` in the upstream at the
+#      locked SHA), which means Conversation Hits would otherwise be
+#      empty out of the box. Universal Palette requires Conversation
+#      Hits as a release hard prerequisite, so we enable the index here.
 #
-#   2. The path resolves to a stable per-home location. We deliberately
-#      do NOT use `:memory:` (which would force rebuild-on-every-search
-#      and block the host on large sessions). We also do NOT use `~/`
-#      expansion — the host resolves it with `path.resolve` and the
-#      un-expanded form silently lands inside the DSH dependency tree
-#      on upgrade.
+#   2. The `path` is a `!!js` expression that calls the official
+#      `dshHomePath(...)` helper from `@deepseek-ai/dsh-home-paths`.
+#      That helper is provided to `!!js` expressions in the entry
+#      config via `ctx.dshHomePath` (declared in the `Context`
+#      module augmentation in
+#      `packages/boot/app-boot/src/index.ts` at the locked SHA), and
+#      it resolves to an absolute path under `${DSH_HOME:-~/.dsh}`.
+#      We do NOT use a `${DSH_HOME}` shell-style literal: the patch
+#      parser does not expand shell variables, and the
+#      `session-query-sqlite` Config schema validates `path` as a
+#      plain non-blank string that is later passed to `path.resolve`
+#      without further substitution. `!!js dshHomePath('session-query.sqlite')`
+#      is the DSH-official way to compose DSH_HOME-relative paths
+#      in entry config (same pattern the shipped base bundle uses
+#      for `storage-json` at the locked SHA:
+#      `root: !!js dshHomePath('storages')`).
 #
 #   3. Adds the `dsh-universal-palette` row itself (the plugin body;
 #      empty config — the browser half owns the surface).
@@ -35,7 +44,7 @@
 # but the default below is safe and deterministic.
 - id: session-query-sqlite
   config:
-    path: ${DSH_HOME}/session-query.sqlite
+    path: !!js dshHomePath('session-query.sqlite')
     openAt: first-search
 
 # The plugin row. The browser half declares the shell.overlay child

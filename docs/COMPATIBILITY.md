@@ -39,6 +39,70 @@ This is exactly one override entry in `cordis.patch.yml`. It activates
 the persistent FTS index so Conversation Hits populate without the user
 installing `dsh-session-workbench`.
 
+### `config.path` resolution (verified against locked SHA)
+
+The override uses a DSH `!!js` expression — NOT a string literal and
+NOT a shell-style `${DSH_HOME}` substitution. The DSH patch parser
+does not perform shell variable expansion; the `session-query-sqlite`
+Config schema validates `path` as a plain non-blank string and the
+upstream `openSearchDatabase(path, ...)` (in
+`packages/session-query/session-query-sqlite/src/schema.ts` at the
+locked SHA) calls `path.resolve(path)` only on non-`:memory:` values,
+without further substitution. A literal `${DSH_HOME}/...` would be
+passed verbatim to `path.resolve` and would fail to resolve to a
+real directory.
+
+The supported way to compose DSH_HOME-relative paths in entry
+config is a `!!js` expression that calls the official `dshHomePath`
+helper from `@deepseek-ai/dsh-home-paths`. The same pattern ships
+in the upstream base bundle at the locked SHA
+(`packages/bundle/base/cordis.patch.yml`, line 113):
+`root: !!js dshHomePath('storages')` for the `storage-json` row.
+
+`dshHomePath` is provided to `!!js` expressions via the `Context`
+module augmentation in
+`packages/boot/app-boot/src/index.ts` at the locked SHA:
+`ctx.dshHomePath` is installed by `app-boot` before any entry
+mounts (line 138 of `app-boot/src/index.ts`:
+`ctx.provide('dshHomePath', dshHomePath)`). The helper itself
+(`packages/util/home-paths/src/index.ts` at the locked SHA)
+resolves `$DSH_HOME` (or `~/.dsh` when unset) and joins segments
+via Node's `path.join` — returning an absolute path.
+
+Our patch value:
+
+```yaml
+- id: session-query-sqlite
+  config:
+    path: !!js dshHomePath('session-query.sqlite')
+    openAt: first-search
+```
+
+The `!!js` tag at the start of the value makes the YAML parser
+produce an expression node (`{ __jsExpr: '...' }`) which the
+Loader's `internal/config` interpolation evaluates at entry
+activation against the ctx the activator has populated. The
+result is a plain non-blank string which `resolveConfig` in
+`packages/session-query/session-query-sqlite/src/index.ts` at the
+locked SHA accepts as the FTS path.
+
+A test in `tests/integration/cordis-patch.test.ts` proves:
+- The patch's `path` is a `!!js` expression node (not a string literal).
+- The expression source text contains no shell-variable reference
+  (`$` character) and starts with `dshHomePath(`.
+- Evaluating the expression against a small sandboxed helper that
+  mirrors `dshHomePath` from `@deepseek-ai/dsh-home-paths`
+  produces an absolute path ending in `session-query.sqlite` that
+  starts with the resolved home — not the literal `${DSH_HOME}/...`
+  string.
+
+This is the closest unit-level evidence we can produce without
+spinning up the full DSH boot graph. The upstream covers the
+full live Loader path in
+`packages/session-query/session-query-sqlite/tests/load-path.e2e.ts`
+(against the real home-paths helper, real `dsh` test launcher, real
+`ctx.dshHomePath` injection).
+
 ### Bindings Universal Palette does NOT use
 
 These are real DSH capabilities but **not** used by Universal Palette
