@@ -13,6 +13,7 @@ import { rankItems, type RankedItem } from './ranking/rank.ts'
 export interface AggregatorOptions {
   readonly providers: readonly PaletteProvider[]
   readonly preferences: () => PalettePreferences
+  readonly context?: () => PaletteContext
   readonly now?: () => number
   readonly softDeadlineMs?: number
   readonly hardLimit?: number
@@ -37,6 +38,7 @@ type Listener = (state: QueryState) => void
 export class PaletteAggregator {
   private readonly providers: readonly PaletteProvider[]
   private readonly preferencesGetter: () => PalettePreferences
+  private readonly contextGetter: () => PaletteContext
   private readonly nowFn: () => number
   private readonly softDeadlineMs: number
   private readonly hardLimit: number
@@ -57,6 +59,7 @@ export class PaletteAggregator {
   constructor(opts: AggregatorOptions) {
     this.providers = opts.providers
     this.preferencesGetter = opts.preferences
+    this.contextGetter = opts.context ?? (() => ({}))
     this.nowFn = opts.now ?? Date.now
     this.softDeadlineMs = opts.softDeadlineMs ?? DEFAULT_SOFT_DEADLINE_MS
     this.hardLimit = opts.hardLimit ?? DEFAULT_HARD_LIMIT
@@ -116,7 +119,7 @@ export class PaletteAggregator {
     const actionsHint = trimmed.startsWith('>')
     const effectiveQuery = actionsHint ? trimmed.slice(1).trimStart() : trimmed
 
-    const context: PaletteContext = {}
+    const context = this.contextGetter()
 
     this.state = {
       ...this.state,

@@ -34,23 +34,14 @@ const ID = '@yunmin311/dsh-universal-palette'
  *  imports. This is the upstream's `clientBundle(...)` purity rule.
  */
 const SHARED_INJECT_NAMES: ReadonlySet<string> = new Set([
+  'react',
+  'react/jsx-runtime',
+  'react-dom',
+  'react-dom/client',
   '@deepseek-ai/cordis',
-  '@deepseek-ai/dsh-client-ui-commands',
-  '@deepseek-ai/dsh-client-ui-sessions',
-  '@deepseek-ai/dsh-client-ui-model-selection',
-  '@deepseek-ai/dsh-client-ui-layout',
   '@deepseek-ai/dsh-client-store',
-  '@deepseek-ai/dsh-client-ui-renderer',
-  '@deepseek-ai/dsh-client-ui-connection',
   '@deepseek-ai/dsh-client-ui-slots',
-  '@deepseek-ai/dsh-client-modules',
-  '@deepseek-ai/dsh-client-locale',
   '@deepseek-ai/dsh-client-ui-primitives',
-  '@deepseek-ai/dsh-client-test-runtime',
-  '@deepseek-ai/dsh-session',
-  '@deepseek-ai/dsh-home-paths',
-  '@deepseek-ai/dsh-session-query',
-  '@deepseek-ai/dsh-launch-environment',
 ])
 
 function isSharedInject(name: string): boolean {

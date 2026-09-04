@@ -112,3 +112,34 @@ test('cancel aborts in-flight query', async () => {
   await Promise.all([first, second])
   assert.equal(agg.getState().query, 'second')
 })
+
+test('empty query ranks items against the live context supplied by the host adapter', async () => {
+  const contextual: PaletteProvider = {
+    id: 'contextual',
+    label: 'contextual',
+    collect() {
+      return [{
+        id: 'contextual:one',
+        providerId: 'contextual',
+        kind: 'session',
+        title: 'Current session',
+        context: { sessionId: 'session-1' },
+        primary: { id: 'open', title: 'Open', run: () => {} },
+        secondary: [],
+      }]
+    },
+  }
+  const agg = new PaletteAggregator({
+    providers: [contextual],
+    context: () => ({ sessionId: 'session-1' }),
+    preferences: () => ({
+      pins: {},
+      frecency: {},
+      glassIntensity: 'soft',
+      shortcut: 'Ctrl+Shift+K',
+    }),
+    debounceMs: 0,
+  })
+  await agg.setQueryImmediate('')
+  assert.equal(agg.getState().items[0]?.item.id, 'contextual:one')
+})

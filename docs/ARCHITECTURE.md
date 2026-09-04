@@ -1,173 +1,55 @@
 # Architecture
 
-DSH Universal Palette follows the DSH dual-face plugin contract at
-the locked upstream SHA
-`deepseek-ai/deepseek-harness@76fda729799fe9b3848dbe2c211d4b231032b81e`
-(`@deepseek-ai/dsh@0.1.2-rc.1`).
+## Trust boundary
 
-## Locked baseline
+Universal Palette is a browser-only UI capability over DSH-owned state. It does not own a second command catalog, Session list, Model directory, or history index.
 
-| | |
-|---|---|
-| Upstream | `deepseek-ai/deepseek-harness` |
-| SHA | `76fda729799fe9b3848dbe2c211d4b231032b81e` |
-| Root package version | `0.1.2-rc.1` |
-
-Other DSH versions are best-effort / unverified. The plugin targets
-this single SHA.
-
-## Host / Browser split
-
-```
-┌─ Host ──────────────────────┐   ┌─ Browser ────────────────────────────────────────┐
-│ Cordis tree                │   │ client cordis root ctx                             │
-│ sessions/agents/SessionLog │◀─▶│  ├ dsh-universal-palette plugin                    │
-│ Connection + Gateway       │   │  │  ├ host (empty apply)                            │
-│ webserver                  │   │  │  └ client (mounted as `lib/client.js`)          │
-│ session-query-sqlite       │   │  │     ├ apply(ctx) + inject                         │
-│   (overridden by patch)    │   │  │     ├ Capability probe                           │
-└────────────────────────────┘   │  │     ├ Providers (one per native capability)      │
-                                 │  │     ├ Aggregator (query, abort, debounce, rank)  │
-                                 │  │     ├ Preferences store (frecency, pin)          │
-                                 │  │     └ UniversalPalette component (DOM)          │
-                                 │           mounted into shell.overlay slot chain   │
-                                 │           via ctx.slots.register(...)              │
-                                 └────────────────────────────────────────────────────┘
+```text
+DSH host services
+  remote.commands / session-query-sqlite
+             |
+DSH public browser services
+  sessions / workspaces / modelDirectories / slots
+             |
+typed adapters -> existing aggregator/ranking/preferences -> existing Palette UI
 ```
 
-## Bundle contract
+The locked contract is `deepseek-ai/deepseek-harness@76fda729799fe9b3848dbe2c211d4b231032b81e`, package version `0.1.2-rc.1`.
 
-The browser half is produced by `tsdown.client.ts` exactly along the
-upstream `packages/client/tsdown.client.ts` lines (locked SHA). It
-emits two artifacts:
+## Browser activation
 
-- `lib/index.js` — Node half, ESM. The host apply (empty).
-- `lib/client.js` — Browser half, CJS, wrapped with:
-
-  ```js
-  window.__ModuleLoader__.load({
-    id: "@yunmin311/dsh-universal-palette",
-    factory: (require) => {
-      var module = { exports: {} };
-      var exports = module.exports;
-      // … plugin body, including exports.apply = apply;
-      //                            exports.inject = inject;
-      //                            exports.default = { inject, apply };
-      return module.exports;
-    }
-  });
-  ```
-
-The DSH browser shell (the `apps/web` host's `lib/client/index.ts`
-+ `@deepseek-ai/dsh-client-modules`) consumes the bundle, calls
-`window.__ModuleLoader__.load(...)` per `BootModuleRow`, materializes
-the module into its lazy-CJS module table, and treats the resolved
-`module.exports` as a Cordis plugin entry whose `apply` and
-`inject` fields the host's Cordis activator consumes.
-
-The bundle config pins:
-- `format: 'cjs'` (NOT `'esm'` — the previous round's ESM bundle
-  produced `SyntaxError: Unexpected token 'export'` in the real
-  browser).
-- `outDir: 'lib'` (NOT `'dist/'`).
-- `entryFileNames: 'client.js'` so the manifest scan matches
-  `exports["./client"]: "./lib/client.js"`.
-- `dts: false` — the types live in `lib/types/...` from a separate
-  `tsc` run.
-- `clean: false` — a default clean would wipe the Node-half output.
-- `define` for `process.env.NODE_ENV` + `import.meta.env.MODE` so
-  inline dep packages (zustand / immer) work.
-- The `dsh-client-bundle-purity` plugin: any `@deepseek-ai/*` value
-  import not in the shared-inject list throws at build time. This
-  matches the upstream rule (per `packages/client/tsdown.client.ts`
-  at the locked SHA) and prevents cross-plugin value imports.
-
-## Plugin contract (browser half)
+`src/client/index.ts` exports Cordis `inject` and `apply(ctx)`. Activation builds four typed adapters and registers a React component through:
 
 ```ts
-export const inject = [
-  '@deepseek-ai/dsh-client-ui-commands',
-  '@deepseek-ai/dsh-client-ui-sessions',
-  '@deepseek-ai/dsh-client-ui-model-selection',
-  '@deepseek-ai/dsh-client-ui-layout',
-  '@deepseek-ai/dsh-client-store',
-] as const
-
-export function apply(ctx: Context): void {
-  // 1. Capability probe (read real DSH services through `ctx.inject`).
-  // 2. Build providers from the live capability surface.
-  // 3. Build the aggregator + preferences store.
-  // 4. Register the Component into the `shell.overlay` slot chain
-  //    via `ctx.slots.register({ name, children: { palette: ... } })`.
-  // 5. Bind `Ctrl/Cmd+Shift+K`; surface conflicts as a notice.
-}
+ctx.slots.inject('shell.overlay', () =>
+  ctx.slots.register({ name: 'shell.overlay', id: 'dsh-universal-palette' }, Component))
 ```
 
-The activator reads from `ctx` directly (not from a custom
-`ClientCtx` shape). Capability probe is a single-pass read of each
-named service; missing service → that provider is not registered →
-that category does not surface items → the UI hides it.
+There is no `document.body` fallback, DOM query, or private store access.
 
-## Slot mount
+## Adapter ownership
 
-The activator does NOT touch `document.body`. The component
-returned from `apply`'s slot registration is mounted by the shell's
-slot renderer into the `shell.overlay` slot's `palette` child
-outlet (per the slot system standard at
-`.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.md`
-at the locked SHA). The Component reads aggregator state through
-`props` and renders into a `HTMLElement` via `root` passed in by the
-slot renderer. There is no DOM scraping, no `querySelector`, no
-private store.
+- Commands read and execute against the selected top-level Session through `ctx.remote.commands`. A Remote failure, rejected command, or command error becomes an explicit thrown error.
+- Sessions map the single `ctx.sessions.list` observable snapshot and the `ctx.workspaces.list` snapshot. Pending lists use `ctx.sessions.refresh()`; opening uses `ctx.sessions.open(id)`. Archived and subagent Sessions are excluded.
+- Models resolve the selected top-level Session with `directoryFor(sessionId)`, await `load()`, map `groups/current`, and submit the complete public `ModelSelection` to `select()`.
+- Conversation Hits use `ctx.sessions.search(query, signal)`, which delegates to the Host's visible-message search. The returned snippet is both rendered and included as an item keyword so the unchanged ranking layer can match event text.
 
-## Provider set (V1 P0)
+The aggregator receives a live context getter derived from the same Session and Workspace snapshots. Ranking, preferences, keyboard behavior, and Palette presentation remain internal and unchanged.
 
-| Provider | Source | Required? |
-|---|---|:---:|
-| `commands` | `host.commands.list({sessionId})` | ✅ P0 |
-| `sessions` | `host.sessions.list` | ✅ P0 |
-| `models` | `host.modelDirectory.list({sessionId, signal})` | ✅ P0 |
-| `conversation-hits` | `host.sessionQuery.searchSessions` | ✅ P0 |
-| `skills` | `host.skills.list` | optional |
+## Bundle and composition
 
-## Ranking
+`tsdown.client.ts` emits:
 
-`final = 0.46·text + 0.19·context + 0.15·frecency + 0.10·pin + 0.10·hint`
+- `lib/index.js`: ESM host face;
+- `lib/client.js`: CJS browser face wrapped in `window.__ModuleLoader__.load({ id, factory })`.
 
-- `text`: deterministic subsequence + prefix + alias match.
-- `context`: same workspace (+0.55), same session (+0.25), same model
-  provider (+0.20), normalized to [0, 1].
-- `frecency`: `log10(1 + count) · 0.5^(age / 7d)`.
-- `pin`: 1.0 when pinned, else 0.
-- `hint`: 1.0 for command/action kinds when `>` prefix is on, else 0.
+React, Cordis, client-store, ui-slots, and ui-primitives remain platform externals. DSH service packages are type-only imports; their public declarations make invalid API calls fail typecheck without adding browser value imports.
 
-Exact title / exact alias override bumps a result to positions 1-2
-even when the weighted score would put it lower.
+`cordis.patch.yml`:
 
-## Persistence
+- overrides `session-query-sqlite` with the DSH-home path and `openAt: first-search`;
+- inserts `@yunmin311/dsh-universal-palette` into the Web composition.
 
-V1 P0 preferences (frecency, pin) persist to `localStorage` under
-the `dsh-universal-palette` namespace. The store does not own a
-custom database. The hide / alias / per-provider toggle records
-remain in the code as optional / non-blocking surfaces (V1.1).
+## Failure behavior
 
-## Disposal
-
-`ctx.effect(() => async () => ..., 'dsh-universal-palette.teardown')`
-runs when the plugin fiber disposes. It tears down the keyboard
-listener, the aggregator listener, the preferences subscriber,
-the preferences store, and the aggregator — in that order. There
-is no DOM element ownership to clean up; the slot chain owns the
-component, the shell tears it down on fiber dispose.
-
-## Performance characteristics
-
-- Warm open target: < 100 ms (browser only; not measured here).
-- Local provider collect (commands, sessions, models): synchronous
-  in tests; in the wire the browser-side adapter pre-warms the
-  cache on activation.
-- Provider with FTS (session query): hard-capped by
-  `maxSearchResults` on the host side; aggregator caps at 40.
-- Soft deadline: 600 ms by default.
-- Bundle size: `lib/client.js` 45 kB ungzipped / 11 kB gzipped,
-  with source map.
+Provider failures stay isolated by the existing aggregator. Abort signals stop stale queries. Missing current Sessions produce a legitimate empty provider result. No adapter fabricates host state or substitutes sample data.

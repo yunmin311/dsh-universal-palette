@@ -1,132 +1,58 @@
 # dsh-universal-palette
 
-Dense translucent-glass **Universal Palette** for **DeepSeek Harness Web**.
+Universal Palette for DeepSeek Harness Web.
 
-| Shortcut | Where |
-|---|---|
-| `Ctrl+Shift+K` (Windows/Linux) · `Cmd+Shift+K` (macOS) | Open the palette |
+## Compatibility
 
-> **What this release is.** This is the V1 release attempt against the
-> exact DSH upstream SHA pinned below. The build, typecheck, and
-> in-package unit tests are all green. The plugin's cordis.patch.yml
-> matches the DSH composition contract (override + `insert:` form,
-> `!!js dshHomePath(...)` path expression). The browser bundle is a
-> real CJS artifact wrapped with `window.__ModuleLoader__.load({...})`
-> exactly the way the upstream `tsdown.client.ts` produces it.
->
-> **The verdict this round is NO_GO** — and that verdict is recorded
-> in `IMPLEMENTATION_REPORT.md` with the precise reason: the user's
-> acceptance rule for this round required a real `dsh plugin --profile
-> web add .` install + `dsh --profile web` boot + browser smoke.
-> That smoke could not be performed in this environment (no live
-> `dsh` install, no network access to fetch the locked SHA live during
-> this round's tooling run). The remaining integration gaps are
-> wire-adapter bodies against the live DSH client services
-> (`ctx.commands.list({sessionId})`, `ctx.modelDirectories.list(...)`,
-> `ctx.sessionQuery.searchSessions(...)`, etc.) that have to be filled
-> in against the actual first-party DSH client packages; the activator
-> in `src/client/index.ts` is structurally correct (real `apply(ctx)`
-> with real `inject` list, real `ctx.slots.register(...)`) but its
-> service-adapter bodies are placeholders that need the live service
-> contract calls filled in. Those calls exist in the locked DSH
-> source but the integration harness to exercise them is not
-> available in this environment.
+This release is locked to:
 
-## Locked compatibility baseline
+- `deepseek-ai/deepseek-harness@76fda729799fe9b3848dbe2c211d4b231032b81e`
+- `@deepseek-ai/dsh@0.1.2-rc.1`
 
-| | |
-|---|---|
-| Upstream | `deepseek-ai/deepseek-harness` |
-| SHA | `76fda729799fe9b3848dbe2c211d4b231032b81e` |
-| Root package version | `0.1.2-rc.1` |
+Other DSH revisions are not covered by this acceptance record.
 
-Other DSH versions are best-effort / unverified. The plugin targets
-this single SHA. Behavior on a different SHA is not characterized
-by the V1 release contract.
+## Install and run
 
-## Install (once the live smoke is performed)
-
-```sh
-dsh plugin --profile web add github:yunmin311/dsh-universal-palette#v0.1.0
+```powershell
+dsh plugin --profile web add "<repository-path>"
 dsh --profile web
 ```
 
-Press `Ctrl/Cmd+Shift+K` to open. The default shortcut is deliberately
-**off** `Ctrl/Cmd+K` (taken by `dsh-spotlight`) and **off** `Alt+M`
-(taken by `dsh-model-palette`); on known-conflict, the palette
-surfaces a notice — it never silently overrides.
+Press `Ctrl+Shift+K` on Windows/Linux or `Cmd+Shift+K` on macOS.
 
-## Usage
+## Real DSH integration
 
-| Action | Key |
-|---|---|
-| Open palette | `Ctrl/Cmd+Shift+K` |
-| Close palette | `Esc` |
-| Move selection | `↑` / `↓` |
-| Run primary action | `Enter` |
-| Open Action Panel | `Tab` or `→` |
-| Move within Action Panel | `↑` / `↓` |
-| Back from Action Panel | `Esc` or `Tab` |
-| Force commands/actions | type `>` first |
+The browser plugin uses the locked public Client APIs directly:
 
-## How it integrates with DSH
+- Commands: `ctx.remote.commands.list(sessionId)` and `execute(sessionId, line, images, signal)`.
+- Sessions: `ctx.sessions.list.getSnapshot()`, `ctx.sessions.refresh()`, `ctx.sessions.open(id)`, `ctx.sessions.binding(id)`, and `ctx.sessions.subagentAddress(id)`.
+- Models: `ctx.modelDirectories.directoryFor(sessionId)`, then `directory.load()` and `directory.select(selection)`.
+- Conversation Hits: `ctx.sessions.search(query, signal)`; the result snippet is displayed and participates in the existing fuzzy match.
+- Mounting: `ctx.slots.inject('shell.overlay', ...)` and the two-argument `ctx.slots.register(options, Component)` contract.
 
-The package is a real DSH dual-face Cordis plugin:
+The package keeps the official lazy-CJS browser artifact at `lib/client.js`. The Cordis patch inserts the plugin row and configures `session-query-sqlite` with `path: !!js dshHomePath('session-query.sqlite')` plus `openAt: first-search`.
 
-- `src/host/index.ts` — Node-half apply (empty; browser-only capability).
-- `src/client/index.ts` — Browser-half `apply(ctx)` + `inject` manifest,
-  mounted by the DSH shell as a Cordis plugin through the bundle's
-  `window.__ModuleLoader__.load({ id, factory })` registration (see
-  `packages/client/modules/src/client/system.ts` at the locked SHA).
-- `cordis.patch.yml` — overrides the shipped `session-query-sqlite`
-  row to enable a persistent FTS index, and inserts the
-  `dsh-universal-palette` row into the active composition.
-- `tsdown.client.ts` — produces `lib/index.js` (Node half, ESM) and
-  `lib/client.js` (browser half, CJS wrapped with the
-  `window.__ModuleLoader__` banner) per the upstream client-bundle
-  contract at `packages/client/tsdown.client.ts` in the locked SHA.
+## Verified smoke
 
-The browser half uses Cordis services, not direct value imports:
-`ctx.slots.register(...)` mounts the Component into the
-`shell.overlay` slot chain; capability probe reads the real DSH
-client services (`ctx.commands`, `ctx.sessions`,
-`ctx.modelDirectories`, `ctx.sessionQuery`, etc.) through the
-`inject` edges declared in the package's `dsh.client` field.
+On 2026-09-04, an isolated `DSH_HOME` with DSH `0.1.2-rc.1` completed:
 
-## Architecture
+- local plugin add and repeated real Web boots;
+- Palette opening through `Ctrl+Shift+K`;
+- real Command, Session, and Model rows;
+- safe `/goal` execution;
+- switch from DeepSeek-V4-Flash to DeepSeek-V4-Pro with the DSH selector updating;
+- search for `cobalt-otter-904` returning the real conversation snippet and opening its Session;
+- another full DSH restart followed by the same Palette and history-search checks.
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the host /
-browser split, capability probe, ranking math, provider contract,
-disposal guarantees, and the CJS / `window.__ModuleLoader__` bundle
-contract.
-
-## Compatibility matrix
-
-See [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for the exact
-real-API binding table (each binding traced to the upstream DSH
-package + source-of-truth doc at the locked SHA) and the recorded
-deviations.
-
-## Implementation evidence
-
-See [`IMPLEMENTATION_REPORT.md`](IMPLEMENTATION_REPORT.md) for the
-final verdict, the in-package test results, and the explicit
-blockers that prevent this round from being marked READY.
+The isolated profile had no DeepSeek API credential. The seeded model turn therefore recorded DSH's expected `MISSING_CREDENTIAL` error; this did not affect Client API, command, model-selection, session, or FTS acceptance.
 
 ## Development
 
-```sh
-git clone https://github.com/yunmin311/dsh-universal-palette.git
-cd dsh-universal-palette
+```powershell
 pnpm install
-
 pnpm run typecheck
-pnpm run build
 pnpm run test
+pnpm run build
 ```
 
-Requirements: Node.js `>=22.19`, pnpm `11.x`.
-
-## License
-
-MIT
+See [Architecture](docs/ARCHITECTURE.md), [Compatibility](docs/COMPATIBILITY.md), and [Implementation report](IMPLEMENTATION_REPORT.md).

@@ -1,9 +1,8 @@
 /**
  * Unit tests: ranking + fuzzy match.
  *
- * Pure-Node tests; no DSH imports. The aggregator, providers, and
- * ranking modules are DSH-agnostic data flow and can be tested
- * against a fake `HostSurface`.
+ * Pure-Node tests; no DSH imports. The ranking module is
+ * DSH-agnostic data flow and is tested with plain item inputs.
  */
 
 import { test } from 'node:test'
