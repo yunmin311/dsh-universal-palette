@@ -1,12 +1,10 @@
 /**
- * Host entry point.
+ * Host apply — Node half of the dual-face plugin.
  *
- * The host half is intentionally empty: per the DSH architecture split
- * (docs/architecture.md / cordis-plugin-development), this plugin is a
- * browser-only capability. There is no host-side service, tool, or
- * event subscription to register. The file exists so the package
- * `main` export resolves and the bundle can apply to the web profile
- * via cordis.patch.yml.
+ * Universal Palette is a browser-side capability; the host half is
+ * empty (no host-side services, no events, no tools). It exists so
+ * the package's `lib/index.js` and the `dsh.bundle` field in
+ * `cordis.patch.yml` are well-formed.
  */
 
 export const hostApply = (): void => {

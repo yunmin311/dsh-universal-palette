@@ -1,14 +1,11 @@
 /**
- * Keyboard handler (spec §4.1, §10).
+ * Global keyboard handler.
  *
- * Default shortcut: Ctrl+Shift+K (Cmd+Shift+K on macOS). Detects
- * conflicts with known reserved bindings (Ctrl+K = dsh-spotlight,
- * Alt+M = dsh-model-palette, etc.) and exposes them via the conflict
- * report instead of silently overriding.
- *
- * IME safety (spec §3 principle 10): the input element is composition-
- * aware. We never swallow Enter / Arrow / Escape while composition is
- * in progress.
+ * Captures `keydown` at the capture phase so we beat the input
+ * element. Default shortcut is `Ctrl/Cmd+Shift+K` — deliberately
+ * off `Ctrl/Cmd+K` (taken by `dsh-spotlight`) and `Alt+M` (taken
+ * by `dsh-model-palette`). On known-conflict we surface a notice
+ * in the palette surface; we never silently override.
  */
 
 export interface ShortcutReport {
@@ -28,19 +25,10 @@ function normalizeMac(e: KeyboardEvent): string {
   if (e.metaKey) parts.push('Cmd')
   else if (e.ctrlKey) parts.push('Ctrl')
   if (e.altKey) parts.push('Alt')
-  if (e.shiftKey && !isSingleShift(e)) parts.push('Shift')
+  if (e.shiftKey && !(e.key === 'Shift' && !e.ctrlKey && !e.altKey && !e.metaKey)) parts.push('Shift')
   const key = e.key.length === 1 ? e.key.toUpperCase() : e.key
   if (!['Control', 'Shift', 'Alt', 'Meta'].includes(key)) parts.push(key)
   return parts.join('+')
-}
-
-function isSingleShift(e: KeyboardEvent): boolean {
-  return (
-    e.key === 'Shift' &&
-    !e.ctrlKey &&
-    !e.altKey &&
-    !e.metaKey
-  )
 }
 
 export function detectShortcut(e: KeyboardEvent): string {
@@ -67,15 +55,9 @@ export interface KeyboardHandle {
   reportConflicts(): ShortcutReport
 }
 
-/**
- * Attaches a global keydown listener. Only fires when the shortcut
- * matches AND no editable element with an active composition owns focus.
- */
 export function attachKeyboard(opts: KeyboardOptions): KeyboardHandle {
   function isComposing(target: EventTarget | null): boolean {
     if (!(target instanceof HTMLElement)) return false
-    // The InputEvent.data property reflects an active composition; we
-    // also accept the dedicated composition flag on a few engines.
     return target.dataset['composing'] === 'true'
   }
 
@@ -86,8 +68,6 @@ export function attachKeyboard(opts: KeyboardOptions): KeyboardHandle {
       e.preventDefault()
       e.stopPropagation()
       opts.onOpen()
-    } else if (detected === 'Escape') {
-      opts.onClose()
     }
   }
 

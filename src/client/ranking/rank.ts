@@ -1,22 +1,15 @@
 /**
  * Aggregator-side ranking (spec §7).
  *
- * final = 0.46 * textMatch
- *       + 0.19 * contextRelevance
- *       + 0.15 * frecency
- *       + 0.10 * pinBoost
- *       + 0.10 * providerHint
+ * final = 0.46·text + 0.19·context + 0.15·frecency + 0.10·pin + 0.10·hint
  *
- * Hard rules (spec §7):
- *   - exact title and exact alias can jump to position 1-2 even when
- *     their weighted score would put them lower
- *   - hidden items are filtered out
- *   - providers are honored in their declared order only when their text
- *     score is equal (otherwise textMatch dominates)
+ * Hard rules (spec §7): exact title and exact alias override jumps a
+ * result to positions 1-2 even when the weighted score would put it
+ * lower.
  */
 
 import type { PaletteContext, PaletteItem } from '../../shared/contract.ts'
-import { frecencyScore, type PalettePreferences } from './frecency.ts'
+import { frecencyScore, type PalettePreferences } from '../state/preferences.ts'
 import { matchItem, type MatchResult } from './fuzzy.ts'
 
 export interface RankInput {
@@ -30,7 +23,6 @@ export interface RankInput {
 export interface RankedItem {
   readonly item: PaletteItem
   readonly score: number
-  /** Pre-computed text match result; UI uses it for snippet highlighting. */
   readonly match: MatchResult
 }
 
@@ -38,8 +30,8 @@ const WEIGHTS = {
   text: 0.46,
   context: 0.19,
   frecency: 0.15,
-  pin: 0.10,
-  hint: 0.10,
+  pin: 0.1,
+  hint: 0.1,
 } as const
 
 function contextScore(item: PaletteItem, ctx: PaletteContext): number {
@@ -47,7 +39,7 @@ function contextScore(item: PaletteItem, ctx: PaletteContext): number {
   const ic = item.context ?? {}
   if (ctx.workspaceId && ic.workspaceId === ctx.workspaceId) s += 0.55
   if (ctx.sessionId && ic.sessionId === ctx.sessionId) s += 0.25
-  if (ctx.provider && ic.provider === ctx.provider) s += 0.20
+  if (ctx.provider && ic.provider === ctx.provider) s += 0.2
   return Math.min(1, s)
 }
 
@@ -57,14 +49,16 @@ function pinBoost(itemId: string, preferences: PalettePreferences): number {
 
 function providerHintScore(item: PaletteItem, hint: boolean, queryEmpty: boolean): number {
   if (!hint) return 0
-  // The `>` hint only boosts commands/actions; conversations and references
-  // still surface in case the user fat-fingered the prefix.
   if (item.kind === 'command' || item.kind === 'action') return 1
   return 0
 }
 
-function emptyQueryScore(item: PaletteItem, prefs: PalettePreferences, ctx: PaletteContext, now: number): number {
-  // Pinned items come first; then context-relevant; then frecency.
+function emptyQueryScore(
+  item: PaletteItem,
+  prefs: PalettePreferences,
+  ctx: PaletteContext,
+  now: number,
+): number {
   let s = 0
   s += pinBoost(item.id, prefs) * 1.0
   s += contextScore(item, ctx) * 0.7
@@ -75,10 +69,7 @@ function emptyQueryScore(item: PaletteItem, prefs: PalettePreferences, ctx: Pale
 
 export function rankItems(items: readonly PaletteItem[], input: RankInput): RankedItem[] {
   const visible: PaletteItem[] = []
-  for (const it of items) {
-    if (input.preferences.hides[it.id]) continue
-    visible.push(it)
-  }
+  for (const it of items) visible.push(it)
 
   const empty = input.query.trim().length === 0
 
@@ -95,9 +86,7 @@ export function rankItems(items: readonly PaletteItem[], input: RankInput): Rank
       title: item.title,
       subtitle: item.subtitle,
       keywords: item.keywords,
-      aliases: input.preferences.aliases[item.id]
-        ? [input.preferences.aliases[item.id]!]
-        : undefined,
+      aliases: undefined,
     })
     const text = match.score
     const ctx = contextScore(item, input.context)
@@ -117,10 +106,6 @@ export function rankItems(items: readonly PaletteItem[], input: RankInput): Rank
 
   scored.sort((a, b) => b.score - a.score)
 
-  // Exact-match override (spec §7: "exact alias / exact title prefix can
-  // jump to positions 1-2 even when their weighted score would put them
-  // lower"). We only apply this when the query is non-empty and the
-  // match score is exactly the top band (>0.9).
   if (!empty) {
     const top = scored.find((s) => s.match.score >= 0.92)
     if (top) {

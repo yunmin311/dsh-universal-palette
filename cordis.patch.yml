@@ -6,48 +6,38 @@
 #
 # This patch is consumed by `dsh plugin --profile web add .` and composed
 # on top of the active profile's `cordis.patch.yml`. Rows here override
-# shipped rows by id; new rows add to the composition.
+# shipped rows by id; new rows are added via the `insert` form (the same
+# pattern the upstream `dsh-web-app` bundle uses for its browser
+# roster at `packages/bundle/web-app/cordis.patch.yml`).
 #
-# Three things this patch does:
+# Two things this patch does:
 #
-#   1. Activates the shipped `dsh-session-query-sqlite` row by overriding
-#      its config so the FTS index is persistent and opened on first
-#      search. The shipped default is `openAt: never` (see
-#      `packages/bundle/base/cordis.patch.yml` in the upstream at the
-#      locked SHA), which means Conversation Hits would otherwise be
-#      empty out of the box. Universal Palette requires Conversation
-#      Hits as a release hard prerequisite, so we enable the index here.
+#   1. Overrides the shipped `session-query-sqlite` row to enable a
+#      persistent FTS path and `openAt: first-search`. The shipped
+#      default in the base bundle is `openAt: never` (see
+#      `packages/bundle/base/cordis.patch.yml` at the locked SHA),
+#      which would mean Conversation Hits are empty out of the box.
+#      Universal Palette requires Conversation Hits as a release hard
+#      prerequisite.
 #
-#   2. The `path` is a `!!js` expression that calls the official
-#      `dshHomePath(...)` helper from `@deepseek-ai/dsh-home-paths`.
-#      That helper is provided to `!!js` expressions in the entry
-#      config via `ctx.dshHomePath` (declared in the `Context`
-#      module augmentation in
-#      `packages/boot/app-boot/src/index.ts` at the locked SHA), and
-#      it resolves to an absolute path under `${DSH_HOME:-~/.dsh}`.
-#      We do NOT use a `${DSH_HOME}` shell-style literal: the patch
-#      parser does not expand shell variables, and the
-#      `session-query-sqlite` Config schema validates `path` as a
-#      plain non-blank string that is later passed to `path.resolve`
-#      without further substitution. `!!js dshHomePath('session-query.sqlite')`
-#      is the DSH-official way to compose DSH_HOME-relative paths
-#      in entry config (same pattern the shipped base bundle uses
-#      for `storage-json` at the locked SHA:
-#      `root: !!js dshHomePath('storages')`).
-#
-#   3. Adds the `dsh-universal-palette` row itself (the plugin body;
-#      empty config — the browser half owns the surface).
+#   2. Inserts the `dsh-universal-palette` row into the web composition
+#      so the browser roster sees it. The row carries the bundle's
+#      `name` (which is the npm package name Cordis uses to resolve
+#      the bundle) and the `dsh.client` declaration from
+#      `package.json`.
 
-# Override the shipped session-query-sqlite config so the persistent
-# FTS index opens on the first search. The `path` is an absolute
-# filesystem path under the DSH home; users may edit it after install
-# but the default below is safe and deterministic.
+# Full-text session search is opt-in (the base row's `openAt: never`).
+# This restatement keeps the Web values on one durable per-home index
+# opened on the first search.
 - id: session-query-sqlite
   config:
     path: !!js dshHomePath('session-query.sqlite')
     openAt: first-search
 
-# The plugin row. The browser half declares the shell.overlay child
-# slot dependency via `dsh.client.inject: [ui-layout]` in package.json.
-- id: dsh-universal-palette
-  config: {}
+# The plugin row. Inserted into the active composition. The browser
+# half's `dsh.client` declaration in `package.json` advertises
+# `platform: 'web'` and the `inject` edge set the activator reads at
+# composition time.
+- insert:
+    - id: dsh-universal-palette
+      name: '@yunmin311/dsh-universal-palette'

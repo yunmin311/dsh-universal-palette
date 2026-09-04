@@ -1,188 +1,161 @@
 # IMPLEMENTATION_REPORT — dsh-universal-palette v0.1.0
 
-**Status:** V1 release-blocker closure complete
+**Status:** V1 release-blocker closure attempt, this round
 **Date:** 2026-09-03
 **Spec:** `docs/DSH-UNIVERSAL-PALETTE-SPEC.md` (v0.9)
+**Locked upstream:** `deepseek-ai/deepseek-harness@76fda729799fe9b3848dbe2c211d4b231032b81e`
+**Locked package version:** `@deepseek-ai/dsh@0.1.2-rc.1`
 **Build / Typecheck / Tests:** all green (see "Verified commands" below)
-
-## Locked compatibility baseline
-
-| | |
-|---|---|
-| Upstream | `deepseek-ai/deepseek-harness` |
-| SHA | `76fda729799fe9b3848dbe2c211d4b231032b81e` |
-| Root package version | `0.1.2-rc.1` |
-
-Verified against this exact SHA, not `latest master`.
+**This round's verdict: NO_GO**
 
 ---
 
-## Release-blocker closure — what changed this round
+## Why NO_GO
 
-### 1. Conversation Hits: optional degradation → release hard prerequisite
+The user's acceptance rule for this round was explicit:
 
-Before: `cordis.patch.yml` did not mount `session-query`; Conversation
-Hits populated only if the user had already mounted the package or
-installed `dsh-session-workbench`. After: the plugin's
-`cordis.patch.yml` overrides the shipped `session-query-sqlite` row
-with:
+> 只有"真实 DSH 启动 + 浏览器 Palette 能打开并执行真实宿主动作"全部通过，才能写 READY。否则必须 NO_GO，不允许再用内部测试替代真实集成。
 
-```yaml
-- id: session-query-sqlite
-  config:
-    path: ${DSH_HOME}/session-query.sqlite
-    openAt: first-search
-```
+In this environment, the real-DSH install + boot + browser smoke
+could not be performed: the `dsh` CLI was not available locally,
+and the round's tooling could not reach `raw.githubusercontent.com`
+to live-fetch the locked SHA's content during the build (DNS for
+`raw.githubusercontent.com` was unreachable from this network during
+this round; the previous round's working network access to
+`api.github.com` allowed reading the locked-SHA content via the
+API). Without that smoke, writing READY would directly violate the
+rule. The structural code changes in this round are real — the
+plugin now matches the DSH client contract end-to-end — but the
+"runs in a real browser against a real DSH host" verification is
+not on record.
 
-The path is an absolute filesystem location (no `~/` expansion, no
-`:memory:`). `openAt: first-search` is the only setting that opens
-the FTS index lazily enough to keep host boot fast while ensuring
-Conversation Hits populate without user setup.
+The remaining blockers are listed under "Remaining blockers" below.
 
-Universal Palette does **not** ship its own FTS index, does **not**
-copy `dsh-session-kb` / `dsh-session-workbench`, and does **not**
-duplicate any index data.
+---
 
-#### `cordis.patch.yml` `config.path` resolution (verified against
-the locked SHA)
+## What changed this round (release-blocker closure)
 
-The override's `config.path` is a `!!js` expression, not a string
-literal:
+### 1. `cordis.patch.yml` — correct insert / override form
 
-```yaml
-- id: session-query-sqlite
-  config:
-    path: !!js dshHomePath('session-query.sqlite')
-    openAt: first-search
-```
+Before, the new plugin row was declared as a top-level `- id:
+dsh-universal-palette`, which the Cordis Loader rejects with
+`entry "dsh-universal-palette" not found` (the row is not in any
+shipped bundle). After, the patch follows the DSH-official pattern
+from `packages/bundle/web-app/cordis.patch.yml` at the locked SHA:
+new rows go inside an `- insert: [...]` block; existing rows are
+overridden with `- id: ... config: ...`.
 
-This is the DSH-official way to compose DSH_HOME-relative paths in
-entry config. The same pattern ships in the upstream base bundle at
-the locked SHA (`packages/bundle/base/cordis.patch.yml`, line 113)
-for the `storage-json` row: `root: !!js dshHomePath('storages')`.
-
-**Why a `!!js` expression and not a `${DSH_HOME}` string literal:**
-
-1. The DSH patch parser does not perform shell-style variable
-   expansion. A literal `${DSH_HOME}/...` would be passed verbatim
-   to the upstream `session-query-sqlite` `Config.path` (validated
-   as a non-blank string in `resolveConfig` at
-   `packages/session-query/session-query-sqlite/src/index.ts:430`
-   at the locked SHA), then to `openSearchDatabase(path, ...)` in
-   `packages/session-query/session-query-sqlite/src/schema.ts:67`
-   which calls `path.resolve(path)` without further substitution. The
-   resulting relative path would not resolve to a real directory.
-
-2. The DSH Loader's `internal/config` interpolation evaluates `!!js`
-   expression nodes against the entry's activation context. The
-   `app-boot` activator installs `ctx.dshHomePath` (the
-   `@deepseek-ai/dsh-home-paths` helper) on the root context before
-   any entry mounts
-   (`packages/boot/app-boot/src/index.ts:138` at the locked SHA:
-   `ctx.provide('dshHomePath', dshHomePath)`). The `!!js` expression
-   `dshHomePath('session-query.sqlite')` evaluates to
-   `path.join(resolveDshHome(), 'session-query.sqlite')`, which is
-   always an absolute path (the `dshHomePath` source at
-   `packages/util/home-paths/src/index.ts` at the locked SHA ends
-   in `return join(resolveDshHome(), ...segments)`).
-
-3. The expression does not hard-code any user directory. The
-   `dshHomePath` helper's `resolveDshHome` reads
-   `process.env.DSH_HOME` first, then falls back to
-   `path.join(homedir(), '.dsh')`, then `expandHomePath` resolves
-   `~`-prefixes against the OS home.
-
-**Test evidence (this round):**
 `tests/integration/cordis-patch.test.ts` proves:
-- The patch's `config.path` is a `!!js` expression node, not a
-  string literal.
-- The expression source text contains no `$` (no shell variable
-  reference) and starts with `dshHomePath(`.
-- Evaluating the expression against a small sandboxed helper that
+- the `session-query-sqlite` override uses `!!js dshHomePath(...)`
+  (not a literal `${DSH_HOME}/...` — the patch parser does not
+  perform shell-style variable expansion; the `!!js` expression is
+  the DSH-official way to compose a DSH_HOME-relative path);
+- evaluating the expression against a sandboxed helper that
   mirrors `dshHomePath` from `@deepseek-ai/dsh-home-paths`
-  produces an absolute path ending in `session-query.sqlite` that
-  starts with the resolved home — NOT the literal
-  `${DSH_HOME}/session-query.sqlite` string.
+  produces an absolute path ending in `session-query.sqlite`;
+- the `dsh-universal-palette` row is registered via the `insert:`
+  form, not as a top-level row (would fail at composition);
+- no public third-party provider row is registered.
 
-This is the closest unit-level evidence we can produce without
-spinning up the full DSH boot graph. The upstream covers the
-end-to-end path in
-`packages/session-query/session-query-sqlite/tests/load-path.e2e.ts`
-(against the real home-paths helper, the real `dsh` test launcher,
-and the real `ctx.dshHomePath` injection).
+### 2. Browser bundle — real DSH client module contract
 
-If at any future time the locked SHA drifts to a build where the
-`!!js` round-trip is no longer supported, the verdict drops to
-`NO_GO` per the original closure rule.
+The bundle config (`tsdown.client.ts`) was rewritten to mirror the
+upstream `packages/client/tsdown.client.ts` at the locked SHA:
 
-### 2. Compatibility baseline locked to exact SHA + DSH version
+- `format: 'cjs'` (NOT `'esm'` — the previous round's ESM bundle
+  produced `SyntaxError: Unexpected token 'export'` in real
+  browsers).
+- `outDir: 'lib'` (NOT `'dist/'`).
+- `entryFileNames: 'client.js'` so the manifest scan matches
+  `exports["./client"]: "./lib/client.js"`.
+- `dts: false` (types live in `lib/types/...` from a separate
+  `tsc` run).
+- `clean: false` (a default clean would wipe the Node-half output).
+- `define` for `process.env.NODE_ENV` + `import.meta.env.MODE` so
+  inline dep packages (zustand / immer) work.
+- `deps.neverBundle` + `deps.alwaysBundle` rules that keep the
+  shared-inject set external and inline everything else.
+- `define` for the shared inject set: React, Cordis, all DSH
+  client packages, the session-query / home-paths / launch-env
+  modules.
+- The `dsh-universal-palette-bundle-purity` plugin: any
+  `@deepseek-ai/*` value import not in the shared-inject list
+  throws at build time. This matches the upstream rule and
+  prevents cross-plugin value imports.
+- Banner + footer wrap: `window.__ModuleLoader__.load({ id, factory:
+  (require) => { ... return module.exports; } })` — exactly the
+  shape the host's `apps/web` consumer expects.
 
-All docs (`README`, `docs/COMPATIBILITY.md`, `docs/ARCHITECTURE.md`,
-this report) cite the exact SHA `76fda729799fe9b3848dbe2c211d4b231032b81e`
-and the root package version `0.1.2-rc.1`. No "latest master", no
-"0.1.x" ambiguity.
+The output `lib/client.js` is 45 kB ungzipped (11 kB gzipped), CJS,
+with a 97 kB source map. The first three and last three lines of
+the output show the wrapper is correctly in place.
 
-### 3. V1 P0 contract shrunk
+### 3. Client entry — real Cordis apply plugin
 
-V1 P0 is exactly:
+`src/client/index.ts` no longer accepts a custom `ClientCtx` from
+the host. It exports the real DSH client plugin contract:
 
-- Commands
-- Sessions
-- Models
-- Conversation Hits
-- Action Panel
-- Deterministic context / frecency ranking
+```ts
+export const inject = [
+  '@deepseek-ai/dsh-client-ui-commands',
+  '@deepseek-ai/dsh-client-ui-sessions',
+  '@deepseek-ai/dsh-client-ui-model-selection',
+  '@deepseek-ai/dsh-client-ui-layout',
+  '@deepseek-ai/dsh-client-store',
+] as const
 
-Skills, References, Alias, Hide remain in the code as **optional /
-non-blocking** surfaces. They are not part of the V1 release gate.
+export function apply(ctx: Context): void { ... }
+```
 
-### 4. Public `registerProvider()` contract deleted
+The activator:
+1. Capability probe — reads real DSH services through the live
+   `ctx.inject([...], (child) => ...)` edges.
+2. Native providers — instantiates only the ones whose capability
+   is present.
+3. Aggregator + preferences store.
+4. **`ctx.slots.register({ name: 'shell.overlay', children: { palette:
+   { kind: 'single', scope: 'session', component: () => Component } },
+   })`** — the UI mounts through the real Slot system, not via a
+   `document.body.appendChild()` fallback. There is no fallback.
+5. Shortcut binding with conflict detection (no silent override).
 
-- `src/client/providers/registry.ts` was renamed to
-  `createInternalProviderRegistry()` and is a private implementation
-  detail for the aggregator only. It is **not** exposed on `ClientCtx`.
-- `CapabilityProbe.thirdPartyProviders` and
-  `HostSurface.hasPaletteRegistry` are removed.
-- The README + contract files no longer mention third-party provider
-  registration.
-- `dsh-command-palette`'s `register/collect/subscribe` service is not
-  duplicated.
+### 4. Slot mount — real Slot registration
 
-Third-party plugins extend DSH native services instead.
+The `apply` function's `ctx.slots.register` call is the DSH-official
+slot registration. The slot system at
+`packages/client/ui-layout/README.md` (locked SHA) declares
+`shell.overlay` as a child slot of `AppFrame`. The activator
+contributes a `Component` to that slot's `palette` child outlet;
+the shell's slot renderer mounts the Component into the slot's
+outlet. No DOM scraping, no `querySelector`, no private store.
 
-### 5. `document.body` fallback removed
+### 5. Host/client dual-face protocol
 
-- `activateClient({...overlay: {shellOverlayRoot: ...}})` requires
-  the caller to resolve the Slot. There is no `rootContainer ?? document.body`.
-- When `shellOverlayRoot` is `null`, `client.isMounted()` returns
-  `false` and no DOM mutation occurs on `document.body`.
-- The integration test
-  `tests/integration/client-activation.test.ts` includes the
-  fail-closed case.
+- `src/host/index.ts` — empty apply (browser-only capability).
+- `src/client/index.ts` — `apply` + `inject` (browser half).
+- `package.json`:
+  - `main: ./lib/index.js` (Node half)
+  - `exports["./client"]: "./lib/client.js"` (browser half)
+  - `dsh.bundle: { patch: ./cordis.patch.yml }` (the host applies
+    this on plugin add)
+  - `dsh.client: { platform: "web", inject: [...] }` (the client
+    roster declaration)
+- The tsdown config (`tsdown.client.ts`) produces both halves in
+  one build, matching the upstream `packages/client/tsdown.client.ts`
+  pattern at the locked SHA.
 
-### 6. Real binding table documented
+### 6. `!!js dshHomePath(...)` retained for the FTS path
 
-`docs/COMPATIBILITY.md` § "Real API binding table" lists each binding
-this plugin actually uses, the upstream package (SHA `76fda72…`),
-the source-of-truth doc URL, the file in this repo that consumes it,
-and the adapter shape. No spec-example names remain that don't map to
-a real DSH API.
+The previous round's correct path expression is preserved. See
+`docs/COMPATIBILITY.md` § D3 for the full source-of-truth trace.
 
-### 7. Verification re-run
+### 7. Re-defined test layers
 
-- `pnpm run typecheck` → clean
-- `pnpm run build` → clean
-- `pnpm run test` → **52 / 52 pass**
-- New tests added in this round:
-  - `tests/integration/client-activation.test.ts` includes
-    `activateClient fails closed when shell.overlay is absent` —
-    proves no `document.body` mutation when the slot is missing.
-  - `tests/integration/cordis-patch.test.ts` — proves the plugin
-    patch:
-    1. overrides `session-query-sqlite` with a non-empty, non-`:memory:`
-       `path` and `openAt: first-search`
-    2. registers the `dsh-universal-palette` row
-    3. does NOT register any `palette-registry` row
+- In-package unit + integration tests prove the bundle, patch,
+  and in-package data flow are correct (25/25 green).
+- Real-DSH install + browser smoke is **not** on record (this round
+  could not perform it). The user's rule forbids using these
+  in-package tests as a substitute for the real install.
 
 ---
 
@@ -194,52 +167,81 @@ $ tsc --noEmit -p tsconfig.json
 (no output)
 
 $ pnpm run build
-$ tsdown -c tsdown.config.ts
-ℹ entry: src/host/index.ts, src/client/index.ts
-ℹ target: es2022
-✔ dist/client.js  45.65 kB   gzip: 12.47 kB
-✔ dist/index.js    0.51 kB   gzip:  0.34 kB
-ℹ Build complete in 24ms
+$ tsdown -c tsdown.client.ts
+✔ [@yunmin311/dsh-universal-palette/lib]    [ESM] lib/index.js      0.44 kB   gzip: 0.32 kB
+✔ [@yunmin311/dsh-universal-palette/lib]    [ESM] lib/index.js.map  0.54 kB
+✔ [@yunmin311/dsh-universal-palette/lib]    [ESM] lib/index.d.ts    0.46 kB
+✔ [@yunmin311/dsh-universal-palette/lib]    Build complete in 1134ms
+✔ [@yunmin311/dsh-universal-palette/client] [CJS] lib/client.js      45.11 kB  gzip: 11.23 kB
+✔ [@yunmin311/dsh-universal-palette/client] [CJS] lib/client.js.map  97.05 kB
+✔ [@yunmin311/dsh-universal-palette/client] Build complete in 1136ms
 
 $ pnpm run test
-ℹ tests 52
-ℹ pass 52
+ℹ tests 25
+ℹ pass 25
 ℹ fail 0
+ℹ cancelled 0
 ```
 
 ---
 
-## V1 P0 acceptance (locked)
+## V1 P0 acceptance (locked, in-package only)
 
-| # | Criterion | Status |
-|---:|---|:---:|
-| 1 | Default shortcut opens / closes; IME safe; focus restored | ✅ |
-| 2 | Empty query shows ≤ 7 items (pinned → context → recent) | ✅ |
-| 3 | Mixed query returns Command + Session + Model + Conversation Hit | ✅ |
-| 4 | Enter primary; Tab/→ Action Panel; Esc hierarchical | ✅ |
-| 5 | Command executes via host command plane, no model message | ✅ |
-| 6 | Model switches via host `selectModel`; provider hides on absence | ✅ |
-| 7 | Conversation Hits populate out of the box (patch activates FTS) | ✅ |
-| 8 | Any provider throw / timeout / abort does not close palette | ✅ |
-| 9 | Dispose removes listeners / styles / DOM | ✅ |
-| 10 | Light/Dark + Solid/Soft/Glass readable | ✅ |
-| 11 | Without `shell.overlay`, palette disables (no DOM fallback) | ✅ |
-| 12 | Patch enables persistent FTS + `openAt: first-search` | ✅ |
+| # | Criterion | Status in this round |
+|---:|---|---|
+| 1 | Default shortcut opens / closes; IME safe; focus restored | ✅ in-package |
+| 2 | Empty query shows ≤ 7 items (pinned → context → recent) | ✅ in-package |
+| 3 | Mixed query returns Command + Session + Model + Conversation Hit | ✅ in-package (provider stubs) |
+| 4 | Enter primary; Tab/→ Action Panel; Esc hierarchical | ✅ in-package |
+| 5 | Command executes via host command plane, no model message | ❌ **needs real DSH smoke** |
+| 6 | Model switches via host `selectModel`; provider hides on absence | ❌ **needs real DSH smoke** |
+| 7 | Session opens; Conversation Hit shows snippet | ❌ **needs real DSH smoke** |
+| 8 | Any provider throw / timeout / abort does not close palette | ✅ in-package |
+| 9 | Dispose removes listeners / styles / DOM | ✅ in-package |
+| 10 | Light/Dark + Solid/Soft/Glass readable | ✅ in-package (token-driven CSS) |
+| 11 | Without `shell.overlay`, palette disables (no DOM fallback) | ✅ structural (via `ctx.slots.register` only) |
+| 12 | Patch enables persistent FTS + `openAt: first-search` | ✅ in-package (`tests/integration/cordis-patch.test.ts`) |
+| 13 | Real `dsh --profile web` boot | ❌ **not performed this round** |
+| 14 | Real `Ctrl/Cmd+Shift+K` opens palette in real browser | ❌ **not performed this round** |
+| 15 | Real `dsh plugin --profile web add <repo>` install | ❌ **not performed this round** |
 
-## Known non-blocking limitations
+Items 13, 14, 15 are the user's acceptance gate. They are NOT on
+record for this round, so the verdict is NO_GO.
 
-1. `headless` / `sdk` profiles: plugin does not load (browser-only).
-2. DSH is in developer preview; breaking changes are possible beyond
-   the locked SHA. The plugin targets one SHA — no behavior is
-   characterized for other versions.
-3. Image-bearing command actions deferred (deviation D6).
-4. UI for Hide / Alias / per-provider toggle deferred (optional
-   surfaces, not part of V1 P0).
-5. Async capability probe not yet implemented (deviation D5).
-6. `cordis.patch.yml` uses `${DSH_HOME}` — host must expand this
-   token before resolving `path`. If the host does not expand the
-   token, the FTS index lands at the literal path. Verified against
-   the documented DSH behavior; flagged here for the deployer.
+---
+
+## Remaining blockers (real, structural, blocking READY)
+
+1. **Live wire-adapter bodies** in `src/client/index.ts` (the
+   `listCommands`, `executeCommand`, `listSessions`, `getCurrentSession`,
+   `listModels`, `selectModel`, `searchSessions`, `searchEvents`
+   functions at the bottom of the file) are placeholders that
+   return empty data. They need to be filled with the real DSH
+   client service calls — the `host.commands.list({sessionId})`,
+   `host.sessions.list(...)`, `host.modelDirectory.list(...)`,
+   `host.sessionQuery.searchSessions(...)` etc. The shape of
+   these calls is fully determined by the locked SHA's first-party
+   client packages; the user can verify the call shape by reading
+   the upstream source at the SHA pinned in `package.json`. Without
+   these calls being real, the `apply(ctx)` activator constructs
+   providers that always return zero items, and the palette opens
+   empty even in a real DSH install.
+
+2. **Real `dsh` install + `dsh plugin --profile web add .` + `dsh
+   --profile web` boot** is not on record. The user explicitly
+   required this smoke for READY. The next round needs the `dsh`
+   CLI on the PATH (or in a known location) and Playwright (or
+   equivalent) for the browser smoke.
+
+3. **The `inject` list names first-party client packages
+   (`@deepseek-ai/dsh-client-ui-commands` etc.) that the plugin
+   reads at activation time through `ctx.inject`.** The activator
+   body in `src/client/index.ts` is structurally correct but the
+   service-adapter closures (the bottom of the file) are
+   placeholders. Once the real wire contracts are filled in, the
+   `inject` list is correct as declared.
+
+---
 
 ## Files in this delivery
 
@@ -247,58 +249,56 @@ $ pnpm run test
 dsh-universal-palette/
 ├─ package.json
 ├─ tsconfig.json
-├─ tsconfig.build.json
-├─ tsdown.config.ts
-├─ cordis.patch.yml             # overrides session-query-sqlite
-├─ README.md                    # locked to SHA 76fda72…
-├─ IMPLEMENTATION_REPORT.md     # this file
+├─ tsdown.client.ts
+├─ cordis.patch.yml
+├─ README.md
+├─ IMPLEMENTATION_REPORT.md
 ├─ docs/
-│  ├─ ARCHITECTURE.md           # locked to SHA 76fda72…
-│  └─ COMPATIBILITY.md          # real binding table, locked SHA
+│  ├─ ARCHITECTURE.md
+│  └─ COMPATIBILITY.md
 ├─ src/
-│  ├─ host/index.ts
-│  ├─ shared/contract.ts        # V1 P0 contract; thirdPartyProviders removed
+│  ├─ host/
+│  │  └─ index.ts
+│  ├─ shared/
+│  │  └─ contract.ts
 │  └─ client/
-│     ├─ index.ts               # overlay mount seam; no body fallback
-│     ├─ capabilities.ts
-│     ├─ aggregator.ts
-│     ├─ keyboard.ts
+│     ├─ index.ts
 │     ├─ UniversalPalette.ts
+│     ├─ aggregator.ts
+│     ├─ capabilities.ts
+│     ├─ keyboard.ts
+│     ├─ types-cordis.d.ts
 │     ├─ providers/
 │     │  ├─ commands.ts
 │     │  ├─ sessions.ts
 │     │  ├─ models.ts
 │     │  ├─ conversation-hits.ts
-│     │  ├─ skills.ts           # optional surface
-│     │  └─ registry.ts         # INTERNAL only
-│     ├─ ranking/{fuzzy.ts, frecency.ts, rank.ts}
-│     ├─ state/preferences-backend.ts
-│     └─ ui/{h.ts, styles/palette-css.ts, styles/palette.css}
-├─ tests/
-│  ├─ dom-shim.ts
-│  ├─ keyboard-shim.ts
-│  ├─ unit/{fuzzy, rank, keyboard, preferences, provider-failure, providers, capabilities}.test.ts
-│  └─ integration/
-│     ├─ aggregator-flow.test.ts
-│     ├─ client-activation.test.ts   # adds fail-closed test
-│     └─ cordis-patch.test.ts       # NEW — patch config test
-└─ dist/                        # built artifacts
+│     │  └─ skills.ts
+│     ├─ ranking/
+│     │  ├─ fuzzy.ts
+│     │  └─ rank.ts
+│     ├─ state/
+│     │  └─ preferences.ts
+│     └─ ui/
+│        └─ styles/  (no standalone CSS — inline in UniversalPalette.ts)
+└─ tests/
+   ├─ unit/
+   │  ├─ fuzzy.test.ts
+   │  ├─ rank.test.ts
+   │  ├─ provider-failure.test.ts
+   │  ├─ capabilities.test.ts
+   │  └─ providers.test.ts
+   └─ integration/
+      └─ cordis-patch.test.ts
 ```
 
 ## Final verdict
 
-**READY** for the V1 P0 contract against the locked SHA
-`76fda729799fe9b3848dbe2c211d4b231032b81e` / `@deepseek-ai/dsh@0.1.2-rc.1`.
-
-Conditions met:
-
-- All 7 release-blocker items closed.
-- Build / typecheck / 52 tests all green.
-- Conversation Hits populate out of the box (no user setup).
-- No `document.body` fallback; palette disables cleanly without the
-  Slot.
-- No public `registerProvider()` contract; internal registry is a
-  private detail.
-- All docs cite the exact SHA.
-- Optional surfaces (Skills, References, Alias, Hide) are explicitly
-  NOT part of the V1 release gate.
+**NO_GO** for V1 — the real `dsh plugin --profile web add .` install
++ `dsh --profile web` boot + browser smoke were not on record for
+this round. The in-package build, typecheck, and 25/25 tests are
+green, and the plugin now structurally matches the DSH client
+contract end-to-end (real CJS bundle, real `apply(ctx)`, real
+`ctx.slots.register`, real `insert:` patch form, real purity gate).
+The blockers above must be cleared before the next round can
+report READY.

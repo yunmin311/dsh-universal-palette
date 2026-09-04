@@ -1,23 +1,5 @@
 /**
  * Deterministic, no-LLM fuzzy + subsequence + alias matcher.
- *
- * Returns a score in [0, 1] where 1 = exact title match and 0 = no hit.
- *
- * Algorithm (chosen for stability + tiny code, spec §7):
- *   - empty query          -> 0
- *   - exact match (case-insensitive) -> 1
- *   - prefix match         -> 0.92
- *   - alias exact          -> 0.95 (aliases are user-defined shortcuts)
- *   - subsequence match    -> decays with gap distance; the closer the
- *                             subsequence is to a prefix, the higher the
- *                             score; also rewards early-start matches
- *
- * This is intentionally NOT a fuzzy-edit-distance algorithm — DSH ships
- * its own cmdk-style ranking in ui-commands. We deliberately diverge so
- * that Universal Palette's ranking has its own explainable signature
- * (frecency + context), not a re-implementation of the slash-command
- * ranker. That separation is part of why this is not a duplicate of
- * dsh-spotlight (spec §2 conflict matrix).
  */
 
 export interface MatchInput {
@@ -29,7 +11,6 @@ export interface MatchInput {
 
 export interface MatchResult {
   readonly score: number
-  /** Substring ranges of `title` that matched; used for keyword highlighting. */
   readonly ranges: readonly Range[]
 }
 
@@ -55,7 +36,6 @@ function findRanges(haystack: string, needle: string): Range[] {
   return ranges
 }
 
-/** Returns the longest contiguous subsequence match as a Range[], or null. */
 function subsequence(haystack: string, needle: string): Range[] | null {
   const h = lower(haystack)
   const n = lower(needle)
@@ -86,10 +66,8 @@ export function matchItem(query: string, input: MatchInput): MatchResult {
   const lt = lower(title)
   const lq = lower(q)
 
-  // 1. exact title (case-insensitive)
   if (lt === lq) return { score: 1, ranges: [{ start: 0, end: title.length }] }
 
-  // 2. alias exact
   if (input.aliases && input.aliases.length > 0) {
     for (const a of input.aliases) {
       if (lower(a) === lq) {
@@ -98,17 +76,14 @@ export function matchItem(query: string, input: MatchInput): MatchResult {
     }
   }
 
-  // 3. prefix on title
   if (lt.startsWith(lq)) {
     return { score: 0.92, ranges: [{ start: 0, end: q.length }] }
   }
 
-  // 4. prefix on subtitle
   if (input.subtitle && lower(input.subtitle).startsWith(lq)) {
     return { score: 0.7, ranges: [] }
   }
 
-  // 5. keyword prefix
   if (input.keywords) {
     for (const k of input.keywords) {
       if (lower(k).startsWith(lq)) {
@@ -120,23 +95,20 @@ export function matchItem(query: string, input: MatchInput): MatchResult {
     }
   }
 
-  // 6. subsequence in title (the typical fuzzy case)
   const sub = subsequence(title, q)
   if (sub) {
     const totalSpan = sub[sub.length - 1]!.end - sub[0]!.start
     const density = q.length / Math.max(totalSpan, 1)
     const early = 1 - sub[0]!.start / Math.max(lt.length, 1)
-    const score = Math.min(0.86, 0.55 + 0.20 * density + 0.11 * early)
+    const score = Math.min(0.86, 0.55 + 0.2 * density + 0.11 * early)
     return { score, ranges: sub }
   }
 
-  // 7. subsequence in subtitle
   if (input.subtitle) {
     const sub = subsequence(input.subtitle, q)
     if (sub) return { score: 0.45, ranges: [] }
   }
 
-  // 8. subsequence in keywords
   if (input.keywords) {
     for (const k of input.keywords) {
       if (subsequence(k, q)) return { score: 0.5, ranges: [] }

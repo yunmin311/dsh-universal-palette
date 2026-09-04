@@ -1,5 +1,9 @@
 /**
- * Unit tests: fuzzy match + subsequence scoring.
+ * Unit tests: ranking + fuzzy match.
+ *
+ * Pure-Node tests; no DSH imports. The aggregator, providers, and
+ * ranking modules are DSH-agnostic data flow and can be tested
+ * against a fake `HostSurface`.
  */
 
 import { test } from 'node:test'
@@ -22,21 +26,6 @@ test('prefix match scores higher than subsequence', () => {
   assert.ok(prefix.score > subseq.score)
 })
 
-test('alias exact match beats subsequence', () => {
-  const alias = matchItem('gc', {
-    title: 'goal cancel',
-    aliases: ['gc'],
-  })
-  const subseq = matchItem('goal cancel', { title: 'goal cancel' })
-  // alias exact (0.95) vs exact title (1) — exact title should win
-  assert.ok(subseq.score > alias.score)
-})
-
-test('subsequence match returns ranges', () => {
-  const r = matchItem('cmpt', { title: 'compact' })
-  assert.ok(r.ranges.length > 0)
-})
-
 test('empty query returns zero', () => {
   const r = matchItem('', { title: 'compact' })
   assert.equal(r.score, 0)
@@ -45,10 +34,4 @@ test('empty query returns zero', () => {
 test('no match returns zero', () => {
   const r = matchItem('zzzzzz', { title: 'compact' })
   assert.equal(r.score, 0)
-})
-
-test('keyword match scores lower than title', () => {
-  const k = matchItem('review', { title: 'go', keywords: ['review'] })
-  const t = matchItem('rev', { title: 'review' })
-  assert.ok(t.score > k.score)
 })

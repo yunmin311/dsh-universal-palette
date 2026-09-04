@@ -1,45 +1,21 @@
-/**
- * Models provider (P0, spec §6.1, §8.4).
- *
- * Source: `ctx.modelDirectories` (per-session provider-grouped directory)
- * and `session.selectModel` (selection contract). Implementation:
- *   - read the current session id (fallback: empty = provider idle)
- *   - call list() and flatten groups into PaletteItems
- *   - primary action submits selection to `session.selectModel`
- *   - secondary actions expose Favorite + "Open source" (which deep-links
- *     into dsh-model-palette's provider config page when the third-party
- *     capability is detected — see spec §2 conflict matrix)
- *
- * Graceful degradation:
- *   - Missing capability: provider not registered.
- *   - Empty current session: provider returns empty (no fake items).
- */
-
-import type {
-  PaletteAction,
-  PaletteCollectInput,
-  PaletteItem,
-  PaletteProvider,
-} from '../../shared/contract.ts'
-import type { CapabilityProbe, ModelEntry, ModelGroup } from '../capabilities.ts'
+import type { PaletteAction, PaletteItem, PaletteProvider } from '../../shared/contract.ts'
+import type { CapabilityProbe, ModelGroup } from '../capabilities.ts'
 
 export function createModelsProvider(probe: CapabilityProbe): PaletteProvider | null {
   if (!probe.modelDirectory) return null
-
   return {
     id: 'models',
     label: 'Models',
     availability: 'ready',
-
-    async collect(input: PaletteCollectInput, signal: AbortSignal): Promise<PaletteItem[]> {
+    async collect(input, signal) {
       const cap = probe.modelDirectory!
       const session = probe.sessions?.getCurrent?.() as { id?: string } | null
-      const sessionId = session?.id ?? input.context.sessionId
+      const sessionId = session?.id
       if (!sessionId) return []
-      let groups: readonly ModelGroup[]
+      let groups: readonly ModelGroup[] = []
       try {
         groups = await cap.list(sessionId, signal)
-      } catch (err) {
+      } catch {
         if (signal.aborted) return []
         return []
       }
@@ -58,7 +34,7 @@ export function createModelsProvider(probe: CapabilityProbe): PaletteProvider | 
 
 function buildModelItem(
   provider: string,
-  model: ModelEntry,
+  model: { id: string; displayName: string; defaultEffort?: string },
   sessionId: string,
   probe: CapabilityProbe,
 ): PaletteItem {

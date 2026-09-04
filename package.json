@@ -1,38 +1,45 @@
 {
-  "name": "dsh-universal-palette",
+  "name": "@yunmin311/dsh-universal-palette",
   "version": "0.1.0",
-  "description": "Dense translucent-glass Universal Palette for DeepSeek Harness Web: federates Commands, Models, Sessions, Conversation Hits, Skills, References into one keyboard-first surface with rich-item secondary actions.",
+  "description": "Dense translucent-glass Universal Palette for DeepSeek Harness Web — federates Commands, Models, Sessions, Conversation Hits with rich secondary actions and deterministic context/frecency ranking.",
   "license": "MIT",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./lib/index.js",
+  "types": "./lib/types/index.d.ts",
   "exports": {
-    ".": "./dist/index.js",
-    "./client": "./dist/client.js"
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
-    "dist",
-    "cordis.patch.yml",
-    "src",
-    "docs"
+    "lib/index.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts",
+    "cordis.patch.yml"
   ],
   "scripts": {
-    "build": "tsdown -c tsdown.config.ts",
+    "build": "tsdown -c tsdown.client.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test --experimental-strip-types tests/unit/*.test.ts tests/integration/*.test.ts",
-    "test:unit": "node --test --experimental-strip-types tests/unit/*.test.ts",
-    "test:integration": "node --test --experimental-strip-types tests/integration/*.test.ts",
+    "test": "node --test --experimental-strip-types \"tests/**/*.test.ts\"",
     "check": "pnpm run typecheck && pnpm run test"
   },
   "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    },
     "client": {
       "platform": "web",
       "inject": [
-        "ui-layout"
-      ]
+        "@deepseek-ai/dsh-client-ui-commands",
+        "@deepseek-ai/dsh-client-ui-sessions",
+        "@deepseek-ai/dsh-client-ui-model-selection",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-store"
+      ],
+      "external": []
     }
   },
   "devDependencies": {
