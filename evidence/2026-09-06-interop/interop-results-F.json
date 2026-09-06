@@ -1,0 +1,105 @@
+{
+  "head": "0b37b4fde94b5f8327e6e2b768b5423aa39bdfaf",
+  "stage": "F",
+  "viewport": "1792x896",
+  "checks": [
+    {
+      "name": "Official Host catalog readable",
+      "status": "PASS",
+      "details": [
+        "clear",
+        "compact",
+        "compact-fast",
+        "export",
+        "feedback",
+        "goal",
+        "permission",
+        "plan",
+        "rename",
+        "unarchive"
+      ]
+    },
+    {
+      "name": "Empty query still mixes command/model/session rows",
+      "status": "PASS",
+      "details": [
+        "session",
+        "command",
+        "command",
+        "command",
+        "command",
+        "model",
+        "model",
+        "model"
+      ]
+    },
+    {
+      "name": "Palette commands healthy with all plugins installed",
+      "status": "PASS"
+    },
+    {
+      "name": "Conversation search healthy (single session-query layer)",
+      "status": "PASS"
+    },
+    {
+      "name": "TUI host commands still present",
+      "status": "PASS"
+    },
+    {
+      "name": "keys.actions present with all four plugins installed",
+      "status": "PASS"
+    },
+    {
+      "name": "Pointer-through contract unchanged (root none / surface auto)",
+      "status": "PASS",
+      "details": {
+        "root": "none",
+        "surface": "auto"
+      }
+    },
+    {
+      "name": "Original focus restored after close with all plugins installed",
+      "status": "PASS"
+    },
+    {
+      "name": "Own shortcut toggle still works with all plugins installed",
+      "status": "PASS"
+    },
+    {
+      "name": "Model rows healthy with all plugins installed",
+      "status": "PASS"
+    },
+    {
+      "name": "@ menu still opens alongside the Palette",
+      "status": "PASS",
+      "details": 1
+    },
+    {
+      "name": "No browser page errors",
+      "status": "PASS"
+    }
+  ],
+  "observations": {
+    "sessionId": "session-3d4320c9-5852-4b64-9bea-527e77b81450",
+    "hostCatalog": [
+      "clear",
+      "compact",
+      "compact-fast",
+      "export",
+      "feedback",
+      "goal",
+      "permission",
+      "plan",
+      "rename",
+      "unarchive"
+    ],
+    "conversationHits": 0,
+    "services": {
+      "keysActions": true,
+      "hostCatalogHasClear": true
+    },
+    "atMenuListboxes": 1
+  },
+  "screenshots": {},
+  "errors": []
+}

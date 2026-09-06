@@ -25,6 +25,7 @@ import {
   createSessionsProvider,
 } from './adapters.ts'
 import { attachKeyboard, type ShortcutReport } from './keyboard.ts'
+import { bridgeKeysActions } from './keysActions.ts'
 import {
   createLocalStorageBackend,
   PreferencesStore,
@@ -52,6 +53,7 @@ interface PaletteOverlayProps {
   readonly sidebar: { getSnapshot: () => boolean; subscribe: (fn: () => void) => () => void }
   readonly aggregator: PaletteAggregator
   readonly preferences: PreferencesStore
+  readonly paletteControl: { toggle: () => void }
 }
 
 /** Register only after ui-layout has declared shell.overlay. */
@@ -81,14 +83,24 @@ export function apply(ctx: Context): void {
   ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
     name: 'sidebar.footer.action', id: 'dsh-universal-palette-layout-state',
   }, SidebarState))
-  const PaletteEntry = () => createElement(PaletteOverlay, { ctx, sidebar, aggregator, preferences })
+  // Optional Keys Palette bridge: exactly one bindable "open" action over the
+  // public keys.actions service; absent plugin means zero behavior change.
+  const paletteControl = { toggle: () => {} }
+  ctx.effect(() => bridgeKeysActions(ctx, {
+    label: () => (ctx.locale.getSnapshot().active.startsWith('zh') ? '打开 Universal Palette' : 'Open Universal Palette'),
+    description: () => (ctx.locale.getSnapshot().active.startsWith('zh')
+      ? '搜索命令、会话、模型与历史' : 'Search commands, sessions, models, and history'),
+    toggle: () => paletteControl.toggle(),
+    onLocaleChange: fn => (typeof ctx.locale.subscribe === 'function' ? ctx.locale.subscribe(fn) : () => {}),
+  }), 'universal-palette: keys-actions bridge')
+  const PaletteEntry = () => createElement(PaletteOverlay, { ctx, sidebar, aggregator, preferences, paletteControl })
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
     id: 'dsh-universal-palette',
   }, PaletteEntry))
 }
 
-function PaletteOverlay({ ctx, sidebar, aggregator, preferences }: PaletteOverlayProps) {
+function PaletteOverlay({ ctx, sidebar, aggregator, preferences, paletteControl }: PaletteOverlayProps) {
   const locale = useSyncExternalStore(fn => ctx.locale.subscribe(fn), () => ctx.locale.getSnapshot())
   const t = ctx.locale.bind(NS)
   const sidebarWide = useSyncExternalStore(sidebar.subscribe, sidebar.getSnapshot)
@@ -124,21 +136,23 @@ function PaletteOverlay({ ctx, sidebar, aggregator, preferences }: PaletteOverla
   }), [aggregator])
 
   useEffect(() => {
+    const show = () => {
+      returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      openRef.current = true
+      panelRef.current = false
+      setOpen(true)
+      setDraft('')
+      setMode('all')
+      setError('')
+      setSelectedIndex(0)
+      setActionPanelOpen(false)
+      void aggregator.setQueryImmediate('')
+    }
+    paletteControl.toggle = () => { openRef.current ? close() : show() }
     const keyboard = attachKeyboard({
       shortcut: preferences.snapshot.shortcut || 'Ctrl+Shift+K',
       isOpen: () => openRef.current,
-      onOpen: () => {
-        returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-        openRef.current = true
-        panelRef.current = false
-        setOpen(true)
-        setDraft('')
-        setMode('all')
-        setError('')
-        setSelectedIndex(0)
-        setActionPanelOpen(false)
-        void aggregator.setQueryImmediate('')
-      },
+      onOpen: show,
       onClose: close,
       onEscape: escape,
       onConflictDetected: (report: ShortcutReport) => { setConflicts(report.conflictsWith) },
