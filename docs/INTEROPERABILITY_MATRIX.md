@@ -74,9 +74,12 @@ Status: **VERIFIED FACTS ONLY**. Every row below was checked against real, insta
 
 ## Public contract gaps (unchanged DSH limitations)
 
-1. **Client commandUi enumeration**: no public discovery for popupSelect contributions; Client-only slash commands are invisible to any aggregator. Gap recorded, not worked around.
-2. **No `@` source enumeration**: `inputTriggers` exposes `registerSource`/`sessionOf` only; there is no public listing of registered reference sources.
-3. **Session Workbench and Reference Anything publish no services**; any handoff needs them to publish one (or must wait for official DSH surfaces).
+1. **Client commandUi enumeration**: no public discovery for popupSelect contributions; Client-only slash commands are invisible to any aggregator. Gap recorded, not worked around. Type-level proof at the locked SHA: `@deepseek-ai/dsh-client-ui-commands` declares `CommandUiContract` as `register` / `decorate` / `popupFor` only, with the contract comment "Business packages consume `register` alone" — no list/snapshot/subscribe exists.
+2. **No public composer reference insertion**: canonical discovery is public (`remote.sessionReferenceResolver.candidates`, `remote.fileReferences.list`), but every insertion path is span-bound or pipeline-internal — `SessionInput.insertReference(ref, span)` requires a pick-time `TokenSpan` (draft CAS), and `PickOutcome` insert outcomes are executed only by the per-session `InputTriggerController` via scoped internal events. No span-free public seam exists. Gap recorded as `NO_PUBLIC_COMPOSER_INSERT_YET`; no `TokenSpan` forgery, no internal event dispatch.
+3. **No `@` source enumeration**: `InputTriggerServiceContract` exposes `registerSource`/`sessionOf` only; there is no public listing of registered reference sources. Gap recorded as `NO_PUBLIC_REFERENCE_SOURCE_ENUMERATION`; other plugins' candidates and business logic stay theirs.
+4. **Session Workbench and Reference Anything publish no services**; any handoff needs them to publish one (or must wait for official DSH surfaces).
+
+Minimal upstream API proposals for gaps 1–3 are written up in [UPSTREAM_INTEROP_GAPS.md](UPSTREAM_INTEROP_GAPS.md).
 
 ## Known default collision (finding, not a defect)
 

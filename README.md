@@ -48,6 +48,16 @@ On 2026-09-04, an isolated `DSH_HOME` with DSH `0.1.2-rc.1` completed:
 
 The isolated profile had no DeepSeek API credential. The seeded model turn therefore recorded DSH's expected `MISSING_CREDENTIAL` error; this did not affect Client API, command, model-selection, session, or FTS acceptance.
 
+## Community interoperability
+
+Verified against real plugin installs (see [INTEROPERABILITY_MATRIX.md](docs/INTEROPERABILITY_MATRIX.md)):
+
+- Host command plugins (e.g. dsh-tui-command-ext) enhance the Palette automatically through the official command catalog — zero adapter.
+- dsh-keys-palette users can bind a shortcut to the `universal-palette.open` action through its public `keys.actions` registry.
+- dsh-session-workbench and dsh-reference-anything coexist safely but currently publish no public handoff API; nothing is claimed beyond coexistence.
+
+This is not "supports all plugins" — only the contracts above are consumed, capability-detected, with zero behavior change when absent.
+
 ## Development
 
 ```powershell
