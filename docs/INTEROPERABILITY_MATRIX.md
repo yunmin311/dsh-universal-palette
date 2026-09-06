@@ -91,3 +91,35 @@ Keys Palette `0.2.0` ships default binding `cycle-theme: Mod+Shift+K`; on Window
 - No public `registerProvider()` restored; no Universal Palette SDK created.
 - No bridge into Session Workbench internals; no call into Reference Anything internals; no copying of its business logic.
 - Schema unchanged: the existing internal item model (optional source metadata + opaque primary/secondary actions) proved sufficient to carry the one adapter; only `src/client/keysActions.ts` and its wiring were added.
+
+## Ecosystem lab — 2026-09-06 (verified additions)
+
+Isolated lab home `interop-lab-v02` (DSH `0.1.2-rc.1`), real installs and boots; machine records under `evidence/2026-09-06-command-compat/` and `evidence/2026-09-06-ecosystem-lab/`.
+
+| Plugin | Exact version | Result |
+|---|---|---|
+| dsh-market | `1.43.0` (npm) | Coexistence PASS: market UI loads, installed-plugin list renders the Palette correctly, no duplicate-loader / dependency-mismatch / invalid-patch diagnostics, no page errors; Palette shortcut/search unaffected. Its shipped compatibility evaluator recognizes `engines.dsh: 0.1.2-rc.1` and returns `compatible` (`engines-dsh-recognition.json`). |
+| dsh-command-code-review | `0.4.0` (`github:JasonFreeLab/dsh-command-code-review@5f77f4d29aba658dc7f33dca89e8848e0a10f118`) | Host command `/code-review` registers through the official `commands` registry and federates into the Palette with zero adaptation (discovery verified; execution is LLM-heavy and argument-requiring, so it was not executed). |
+| dsh-zh-commands | `1.0.0` (`github:Semidia/dsh-zh-commands@fd2c3aa360f765f96c50f188a375d5e830d76a8c`, manual user-layer patch channel — no bundle manifest) | Six read-only Host commands (`/help` `/status` `/time` `/cwd` `/whoami` `/preset`) federate. Audit note: it monkey-patches `commands.list` (description translation) and calls the private `commands.notifyChange()` — works on rc.1, recorded as a fragility, not integrated against. |
+| dsh-skill-picker | `0.5.6` (`github:a735624258/dsh-skill-picker@55dc8ccdff70b08f6419fe2c9d55fef593ba1387`) | **Coexistence break on rc.1**: with it installed, other host-plane plugins silently stop registering their commands (persisted across boots). Its own compatibility table declares only ≤ `0.1.2-alpha.5`. Removed; full recovery verified (17–18 commands federating, stage F PASS). |
+| palette-future-command-probe | local test fixture (`tests/fixtures/future-command-plugin/`) | `/palette-future-probe` — a command the Palette has never seen — appears automatically after install and disappears after uninstall, with no Palette source change. |
+
+### Loader behavior finding (DSH `0.1.2-rc.1`, not a Palette issue)
+
+After a `dsh plugin add`, the **first** boot may silently skip applying newly added host-plane entries (no error output; the live catalog simply lacks them), and a later boot — or any subsequent `dsh plugin` operation plus reboot — reconciles so everything federates. Reproduced with dsh-tui-command-ext, dsh-command-code-review, dsh-zh-commands and the fixture. The Palette is unaffected in every state: it re-reads the live catalog on every query, and the compatibility gate iterates whatever is live (17–18 commands all discoverable with top relevance in the final mixed profile: palette + tui-command-ext + keys-palette + reference-anything + dsh-market + code-review + zh-commands + fixture).
+
+## Interop shortlist (research only — no adapters written)
+
+Classification: `INTEROP_CANDIDATE` = a real public service or official contract exists to build on; `COEXIST_ONLY` = verified coexistence, no deeper surface; `WAIT_PUBLIC_API` = integration blocked until a public contract appears.
+
+| Category | Candidate | Class | Basis |
+|---|---|---|---|
+| Commands | dsh-tui-command-ext / dsh-command-code-review / dsh-zh-commands | INTEROP_CANDIDATE | Official `commands` registry; federation already works today |
+| Skills | official `remote.skills` (DSH), dsh-skill-picker | INTEROP_CANDIDATE (official remote) / WAIT_PUBLIC_API (plugin) | `remote.skills` is a public DSH remote; the picker plugin currently breaks rc.1 coexistence |
+| Sessions / history | dsh-session-workbench | WAIT_PUBLIC_API | `NO_PUBLIC_HANDOFF_YET` |
+| Workspace actions | dsh-plan-switch | COEXIST_ONLY | Composer gesture, no service |
+| References | dsh-reference-anything | WAIT_PUBLIC_API | No public service; official `sessionReferenceResolver` / `fileReferences` are the real path |
+| Plugin discovery | dsh-market | COEXIST_ONLY | Diagnostics/market UI; consumes `engines.dsh` declarations |
+| Model tooling | dsh-better-model-selector | COEXIST_ONLY | Own composer UI, no service |
+
+No registerProvider() was restored and no Universal Palette SDK was created.

@@ -1,0 +1,6 @@
+{
+  "check": "dsh-market recognizes engines.dsh declaration",
+  "method": "ran dshmarket v1.43.0's own shipped evaluator (lib/discovery-compatibility.js manifestFacts + deriveHostCompatibility) against the published package.json and host version 0.1.2-rc.1",
+  "result": { "status": "compatible", "basis": "manifest", "requirement": "0.1.2-rc.1", "declarations": [{ "kind": "engine", "range": "0.1.2-rc.1" }] },
+  "status": "PASS"
+}

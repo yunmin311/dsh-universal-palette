@@ -1,0 +1,17 @@
+{
+  "name": "palette-future-command-probe",
+  "version": "1.0.0",
+  "description": "Test fixture: registers one Host slash command (/palette-future-probe) the Universal Palette has never seen, to prove dynamic command federation.",
+  "type": "module",
+  "main": "lib/index.js",
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

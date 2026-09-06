@@ -1,0 +1,40 @@
+name: DSH compatibility probe
+
+# Non-blocking manual probe: boots nothing by itself — it packages the plugin
+# and records the declared DSH baseline. The full real-boot acceptance
+# (official command catalog gate, coexistence matrix) runs on a Windows
+# machine with a real DSH installation; see docs/COMMAND_COMPATIBILITY.md and
+# scripts/command-compat.mjs. A failure here never blocks main CI.
+on:
+  workflow_dispatch:
+    inputs:
+      dsh_version:
+        description: 'DSH version to record against'
+        required: false
+        default: '0.1.2-rc.1'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19
+      - name: Enable corepack (pnpm 11.7.0)
+        run: corepack enable && corepack prepare pnpm@11.7.0 --activate
+      - name: Install (frozen, skip browser download)
+        run: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 pnpm install --frozen-lockfile
+      - name: Typecheck + tests
+        run: pnpm run check
+      - name: Build
+        run: pnpm run build
+      - name: Record compatibility declaration
+        run: |
+          echo "dsh: ${{ inputs.dsh_version }}" | tee dsh-compat-probe.txt
+          echo "engines.dsh: $(node -p "require('./package.json').engines.dsh")" | tee -a dsh-compat-probe.txt
+          npm pack --dry-run
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dsh-compat-probe
+          path: dsh-compat-probe.txt

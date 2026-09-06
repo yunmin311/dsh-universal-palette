@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19
+      - name: Enable corepack (pnpm 11.7.0)
+        run: corepack enable && corepack prepare pnpm@11.7.0 --activate
+      - name: Install (frozen, skip browser download)
+        run: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 pnpm install --frozen-lockfile
+      - name: Typecheck + tests
+        run: pnpm run check
+      - name: Build
+        run: pnpm run build
+      - name: Package dry-run
+        run: npm pack --dry-run

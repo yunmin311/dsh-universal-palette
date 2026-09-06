@@ -1,0 +1,174 @@
+{
+  "head": "389eb81956d47f7e29ab4516fdda25bc4ad27b55",
+  "dsh": "0.1.2-rc.1",
+  "upstream": "76fda729799fe9b3848dbe2c211d4b231032b81e",
+  "label": "final-after-reconcile",
+  "commandCount": 17,
+  "commands": [
+    {
+      "name": "clear",
+      "parameterized": false,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "mutation: replaces the current session"
+    },
+    {
+      "name": "code-review",
+      "parameterized": true,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "mutation or argument-requiring: discovery only"
+    },
+    {
+      "name": "compact",
+      "parameterized": false,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "executed",
+      "executionDetail": "(() => {\n  const preference = \"dark\"\n  const systemDark = preference === 'system'\n    && typeof matchMedia !== 'undefined'\n    && matchMedia('(prefers-color-scheme: dark)').matches\n  const dark = pref"
+    },
+    {
+      "name": "compact-fast",
+      "parameterized": false,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "mutation: rewrites the message surface"
+    },
+    {
+      "name": "cwd",
+      "parameterized": false,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "mutation or argument-requiring: discovery only"
+    },
+    {
+      "name": "export",
+      "parameterized": false,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "mutation: writes an export artifact outside the session"
+    },
+    {
+      "name": "feedback",
+      "parameterized": true,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "executed",
+      "executionDetail": "(() => {\n  const preference = \"dark\"\n  const systemDark = preference === 'system'\n    && typeof matchMedia !== 'undefined'\n    && matchMedia('(prefers-color-scheme: dark)').matches\n  const dark = pref"
+    },
+    {
+      "name": "goal",
+      "parameterized": true,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "executed",
+      "executionDetail": "(() => {\n  const preference = \"dark\"\n  const systemDark = preference === 'system'\n    && typeof matchMedia !== 'undefined'\n    && matchMedia('(prefers-color-scheme: dark)').matches\n  const dark = pref"
+    },
+    {
+      "name": "help",
+      "parameterized": false,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "mutation or argument-requiring: discovery only"
+    },
+    {
+      "name": "permission",
+      "parameterized": true,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "executed",
+      "executionDetail": "(() => {\n  const preference = \"dark\"\n  const systemDark = preference === 'system'\n    && typeof matchMedia !== 'undefined'\n    && matchMedia('(prefers-color-scheme: dark)').matches\n  const dark = pref"
+    },
+    {
+      "name": "plan",
+      "parameterized": true,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "executed",
+      "executionDetail": "(() => {\n  const preference = \"dark\"\n  const systemDark = preference === 'system'\n    && typeof matchMedia !== 'undefined'\n    && matchMedia('(prefers-color-scheme: dark)').matches\n  const dark = pref"
+    },
+    {
+      "name": "preset",
+      "parameterized": false,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "mutation or argument-requiring: discovery only"
+    },
+    {
+      "name": "rename",
+      "parameterized": true,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "requires argument"
+    },
+    {
+      "name": "status",
+      "parameterized": false,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "mutation or argument-requiring: discovery only"
+    },
+    {
+      "name": "time",
+      "parameterized": false,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "mutation or argument-requiring: discovery only"
+    },
+    {
+      "name": "unarchive",
+      "parameterized": false,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "mutation: mutates workspace membership"
+    },
+    {
+      "name": "whoami",
+      "parameterized": false,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "mutation or argument-requiring: discovery only"
+    }
+  ],
+  "failures": [],
+  "checks": [
+    {
+      "name": "Live Host catalog read",
+      "status": "PASS",
+      "details": [
+        "clear",
+        "code-review",
+        "compact",
+        "compact-fast",
+        "cwd",
+        "export",
+        "feedback",
+        "goal",
+        "help",
+        "permission",
+        "plan",
+        "preset",
+        "rename",
+        "status",
+        "time",
+        "unarchive",
+        "whoami"
+      ]
+    },
+    {
+      "name": "Every live catalog command discoverable with top relevance",
+      "status": "PASS",
+      "details": "17 commands"
+    },
+    {
+      "name": "Client-only /model contribution surfaced via official adjudication",
+      "status": "PASS",
+      "details": true
+    },
+    {
+      "name": "No browser page errors",
+      "status": "PASS"
+    }
+  ],
+  "modelContribution": true
+}

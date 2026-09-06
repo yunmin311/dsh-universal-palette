@@ -1,0 +1,16 @@
+{
+  "checks": [
+    {
+      "name": "market coexistence diagnostics",
+      "status": "PASS",
+      "details": {
+        "showsPalette": true,
+        "showsMarket": true,
+        "duplicateLoaderWarning": false,
+        "dependencyMismatch": false,
+        "invalidPatch": false,
+        "pageErrors": []
+      }
+    }
+  ]
+}

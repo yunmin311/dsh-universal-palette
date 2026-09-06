@@ -1,5 +1,5 @@
 {
-  "head": "0b37b4fde94b5f8327e6e2b768b5423aa39bdfaf",
+  "head": "389eb81956d47f7e29ab4516fdda25bc4ad27b55",
   "stage": "F",
   "viewport": "1792x896",
   "checks": [
@@ -8,15 +8,22 @@
       "status": "PASS",
       "details": [
         "clear",
+        "code-review",
         "compact",
         "compact-fast",
+        "cwd",
         "export",
         "feedback",
         "goal",
+        "help",
         "permission",
         "plan",
+        "preset",
         "rename",
-        "unarchive"
+        "status",
+        "time",
+        "unarchive",
+        "whoami"
       ]
     },
     {
@@ -80,18 +87,25 @@
     }
   ],
   "observations": {
-    "sessionId": "session-3d4320c9-5852-4b64-9bea-527e77b81450",
+    "sessionId": "session-2c22b852-ca56-489c-89b6-a32721895ad7",
     "hostCatalog": [
       "clear",
+      "code-review",
       "compact",
       "compact-fast",
+      "cwd",
       "export",
       "feedback",
       "goal",
+      "help",
       "permission",
       "plan",
+      "preset",
       "rename",
-      "unarchive"
+      "status",
+      "time",
+      "unarchive",
+      "whoami"
     ],
     "conversationHits": 0,
     "services": {

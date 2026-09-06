@@ -84,6 +84,30 @@
     "typescript": "^5.7.2"
   },
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=22.19.0",
+    "dsh": "0.1.2-rc.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yunmin311/dsh-universal-palette.git"
+  },
+  "homepage": "https://github.com/yunmin311/dsh-universal-palette#readme",
+  "bugs": {
+    "url": "https://github.com/yunmin311/dsh-universal-palette/issues"
+  },
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "command-palette",
+    "universal-palette",
+    "cordis"
+  ],
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "lightningcss"
+    ]
   }
 }

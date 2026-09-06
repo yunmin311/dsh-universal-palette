@@ -1,0 +1,86 @@
+{
+  "head": "389eb81956d47f7e29ab4516fdda25bc4ad27b55",
+  "dsh": "0.1.2-rc.1",
+  "upstream": "76fda729799fe9b3848dbe2c211d4b231032b81e",
+  "label": "picker-third-boot",
+  "commandCount": 6,
+  "commands": [
+    {
+      "name": "compact",
+      "parameterized": false,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "executed",
+      "executionDetail": "(() => {\n  const preference = \"system\"\n  const systemDark = preference === 'system'\n    && typeof matchMedia !== 'undefined'\n    && matchMedia('(prefers-color-scheme: dark)').matches\n  const dark = pr"
+    },
+    {
+      "name": "export",
+      "parameterized": false,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "mutation: writes an export artifact outside the session"
+    },
+    {
+      "name": "feedback",
+      "parameterized": true,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "executed",
+      "executionDetail": "(() => {\n  const preference = \"system\"\n  const systemDark = preference === 'system'\n    && typeof matchMedia !== 'undefined'\n    && matchMedia('(prefers-color-scheme: dark)').matches\n  const dark = pr"
+    },
+    {
+      "name": "goal",
+      "parameterized": true,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "executed",
+      "executionDetail": "(() => {\n  const preference = \"system\"\n  const systemDark = preference === 'system'\n    && typeof matchMedia !== 'undefined'\n    && matchMedia('(prefers-color-scheme: dark)').matches\n  const dark = pr"
+    },
+    {
+      "name": "permission",
+      "parameterized": true,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "executed",
+      "executionDetail": "(() => {\n  const preference = \"system\"\n  const systemDark = preference === 'system'\n    && typeof matchMedia !== 'undefined'\n    && matchMedia('(prefers-color-scheme: dark)').matches\n  const dark = pr"
+    },
+    {
+      "name": "plan",
+      "parameterized": true,
+      "discoverable": true,
+      "rankedFirst": true,
+      "execution": "executed",
+      "executionDetail": "(() => {\n  const preference = \"system\"\n  const systemDark = preference === 'system'\n    && typeof matchMedia !== 'undefined'\n    && matchMedia('(prefers-color-scheme: dark)').matches\n  const dark = pr"
+    }
+  ],
+  "failures": [],
+  "checks": [
+    {
+      "name": "Live Host catalog read",
+      "status": "PASS",
+      "details": [
+        "compact",
+        "export",
+        "feedback",
+        "goal",
+        "permission",
+        "plan"
+      ]
+    },
+    {
+      "name": "Every live catalog command discoverable with top relevance",
+      "status": "PASS",
+      "details": "6 commands"
+    },
+    {
+      "name": "Client-only /model contribution surfaced via official adjudication",
+      "status": "PASS",
+      "details": true
+    },
+    {
+      "name": "No browser page errors",
+      "status": "PASS"
+    }
+  ],
+  "modelContribution": true
+}

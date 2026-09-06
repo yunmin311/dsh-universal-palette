@@ -1,0 +1,4 @@
+# Test fixture bundle patch: mounts the future-command probe host half.
+- insert:
+    - id: palette-future-command-probe
+      name: 'palette-future-command-probe'
