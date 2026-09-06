@@ -1,0 +1,125 @@
+{
+  "head": "5db1138a28606343849e3a0cd7ae30c1081b7630",
+  "stage": "B",
+  "viewport": "1792x896",
+  "checks": [
+    {
+      "name": "Official Host catalog readable",
+      "status": "PASS",
+      "details": [
+        "clear",
+        "compact",
+        "compact-fast",
+        "export",
+        "feedback",
+        "goal",
+        "permission",
+        "plan",
+        "rename",
+        "unarchive"
+      ]
+    },
+    {
+      "name": "Empty query still mixes command/model/session rows",
+      "status": "PASS",
+      "details": [
+        "session",
+        "command",
+        "command",
+        "command",
+        "command",
+        "model",
+        "model",
+        "model"
+      ]
+    },
+    {
+      "name": "Host extension commands entered the official live catalog",
+      "status": "PASS",
+      "details": [
+        "clear",
+        "rename",
+        "unarchive",
+        "compact-fast"
+      ]
+    },
+    {
+      "name": "/unarchive executes through the unchanged Commands provider",
+      "status": "PASS"
+    },
+    {
+      "name": "Client-only commands absent from the Host catalog",
+      "status": "PASS",
+      "details": [
+        "rewind",
+        "fork",
+        "resume",
+        "archive",
+        "status",
+        "theme",
+        "lang"
+      ]
+    },
+    {
+      "name": "Client-only commands invisible to the Palette (zero-adapter)",
+      "status": "PASS",
+      "details": [
+        "rewind",
+        "fork",
+        "resume",
+        "archive",
+        "status",
+        "theme",
+        "lang"
+      ]
+    },
+    {
+      "name": "ctx commandUi surface recorded (register-only, no enumeration)",
+      "status": "PASS",
+      "details": [
+        "ctx",
+        "name",
+        "directory",
+        "live",
+        "t",
+        "focusHooks"
+      ]
+    },
+    {
+      "name": "No browser page errors",
+      "status": "PASS"
+    }
+  ],
+  "observations": {
+    "sessionId": "session-3d4320c9-5852-4b64-9bea-527e77b81450",
+    "hostCatalog": [
+      "clear",
+      "compact",
+      "compact-fast",
+      "export",
+      "feedback",
+      "goal",
+      "permission",
+      "plan",
+      "rename",
+      "unarchive"
+    ],
+    "paletteQuery /rewind": 0,
+    "paletteQuery /fork": 0,
+    "paletteQuery /resume": 0,
+    "paletteQuery /archive": 1,
+    "paletteQuery /status": 0,
+    "paletteQuery /theme": 0,
+    "paletteQuery /lang": 0,
+    "commandUiPublicSurface": [
+      "ctx",
+      "name",
+      "directory",
+      "live",
+      "t",
+      "focusHooks"
+    ]
+  },
+  "screenshots": {},
+  "errors": []
+}

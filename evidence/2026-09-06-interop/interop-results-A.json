@@ -1,0 +1,54 @@
+{
+  "head": "5db1138a28606343849e3a0cd7ae30c1081b7630",
+  "stage": "A",
+  "viewport": "1792x896",
+  "checks": [
+    {
+      "name": "Official Host catalog readable",
+      "status": "PASS",
+      "details": [
+        "compact",
+        "export",
+        "feedback",
+        "goal",
+        "permission",
+        "plan"
+      ]
+    },
+    {
+      "name": "Empty query still mixes command/model/session rows",
+      "status": "PASS",
+      "details": [
+        "session",
+        "command",
+        "command",
+        "command",
+        "command",
+        "model",
+        "model",
+        "model"
+      ]
+    },
+    {
+      "name": "Baseline /goal row unchanged",
+      "status": "PASS"
+    },
+    {
+      "name": "No browser page errors",
+      "status": "PASS"
+    }
+  ],
+  "observations": {
+    "sessionId": "session-3d4320c9-5852-4b64-9bea-527e77b81450",
+    "hostCatalog": [
+      "compact",
+      "export",
+      "feedback",
+      "goal",
+      "permission",
+      "plan"
+    ]
+  },
+  "screenshots": {},
+  "errors": []
+}

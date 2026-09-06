@@ -1,0 +1,158 @@
+{
+  "head": "5db1138a28606343849e3a0cd7ae30c1081b7630",
+  "stage": "C",
+  "viewport": "1792x896",
+  "checks": [
+    {
+      "name": "Official Host catalog readable",
+      "status": "PASS",
+      "details": [
+        "clear",
+        "compact",
+        "compact-fast",
+        "export",
+        "feedback",
+        "goal",
+        "permission",
+        "plan",
+        "rename",
+        "unarchive"
+      ]
+    },
+    {
+      "name": "Empty query still mixes command/model/session rows",
+      "status": "PASS",
+      "details": [
+        "session",
+        "command",
+        "command",
+        "command",
+        "command",
+        "model",
+        "model",
+        "model"
+      ]
+    },
+    {
+      "name": "keys.actions exposes the universal-palette.open action",
+      "status": "PASS",
+      "details": [
+        {
+          "id": "toggle-sidebar",
+          "label": "切换侧边栏",
+          "description": "开合左侧工作区栏",
+          "source": "H5"
+        },
+        {
+          "id": "open-details",
+          "label": "打开详情栏",
+          "description": "打开右侧详情栏",
+          "source": "H5"
+        },
+        {
+          "id": "close-details",
+          "label": "关闭详情栏",
+          "description": "收起右侧详情栏",
+          "source": "H5"
+        },
+        {
+          "id": "new-session",
+          "label": "新建会话",
+          "description": "在当前工作区开启新会话",
+          "source": "H5"
+        },
+        {
+          "id": "cycle-theme",
+          "label": "切换明暗主题",
+          "description": "light → dark → system 循环",
+          "source": "H5"
+        },
+        {
+          "id": "cycle-locale",
+          "label": "切换界面语言",
+          "description": "在已安装的语言间循环",
+          "source": "H5"
+        },
+        {
+          "id": "universal-palette.open",
+          "label": "打开 Universal Palette",
+          "description": "搜索命令、会话、模型与历史",
+          "source": "H5"
+        }
+      ]
+    },
+    {
+      "name": "Bound Keys Palette shortcut opens the Palette",
+      "status": "PASS"
+    },
+    {
+      "name": "Same shortcut toggles the Palette closed",
+      "status": "PASS"
+    },
+    {
+      "name": "No browser page errors",
+      "status": "PASS"
+    }
+  ],
+  "observations": {
+    "sessionId": "session-3d4320c9-5852-4b64-9bea-527e77b81450",
+    "hostCatalog": [
+      "clear",
+      "compact",
+      "compact-fast",
+      "export",
+      "feedback",
+      "goal",
+      "permission",
+      "plan",
+      "rename",
+      "unarchive"
+    ],
+    "keysActionsList": [
+      {
+        "id": "toggle-sidebar",
+        "label": "切换侧边栏",
+        "description": "开合左侧工作区栏",
+        "source": "H5"
+      },
+      {
+        "id": "open-details",
+        "label": "打开详情栏",
+        "description": "打开右侧详情栏",
+        "source": "H5"
+      },
+      {
+        "id": "close-details",
+        "label": "关闭详情栏",
+        "description": "收起右侧详情栏",
+        "source": "H5"
+      },
+      {
+        "id": "new-session",
+        "label": "新建会话",
+        "description": "在当前工作区开启新会话",
+        "source": "H5"
+      },
+      {
+        "id": "cycle-theme",
+        "label": "切换明暗主题",
+        "description": "light → dark → system 循环",
+        "source": "H5"
+      },
+      {
+        "id": "cycle-locale",
+        "label": "切换界面语言",
+        "description": "在已安装的语言间循环",
+        "source": "H5"
+      },
+      {
+        "id": "universal-palette.open",
+        "label": "打开 Universal Palette",
+        "description": "搜索命令、会话、模型与历史",
+        "source": "H5"
+      }
+    ]
+  },
+  "screenshots": {},
+  "errors": []
+}
