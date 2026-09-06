@@ -1,8 +1,6 @@
 # dsh-universal-palette
 
-Universal Palette for DeepSeek Harness Web.
-
-**2026-09-05 Design Gate:** the user accepted the overall direction and authorized commit/push after the final Session identity dedupe. Search, glass, locale and layout are frozen. The [authoritative design contract](docs/DESIGN_CONTRACT.md) records the future v0.2 interoperability direction; no v0.2 adapter is included. See the [current report](IMPLEMENTATION_REPORT.md) and [latest Windows evidence](evidence/2026-09-05-design-gate/SMOKE.md).
+Universal Palette for DeepSeek Harness Web: a dense translucent-glass command/session/model/history surface built on the locked public DSH Client APIs. Verified public-contract interoperability with community plugins — see [Community interoperability](#community-interoperability) and [INTEROPERABILITY_MATRIX.md](docs/INTEROPERABILITY_MATRIX.md). Internal review history lives in [DESIGN_CONTRACT.md](docs/DESIGN_CONTRACT.md).
 
 ## Compatibility
 
@@ -13,9 +11,19 @@ This release is locked to:
 
 Other DSH revisions are not covered by this acceptance record.
 
-## Install and run
+## Install release
 
 ```powershell
+dsh plugin --profile web add @yunmin311/dsh-universal-palette@0.2.0
+dsh --profile web
+```
+
+(Installable from the official npm registry once published; `dsh plugin` forwards the package name to the profile package manager.)
+
+## Local development
+
+```powershell
+pnpm install && pnpm run build
 dsh plugin --profile web add "<repository-path>"
 dsh --profile web
 ```

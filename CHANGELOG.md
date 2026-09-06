@@ -12,6 +12,6 @@ Interoperability foundation (locked to `@deepseek-ai/dsh@0.1.2-rc.1`, upstream `
 - Upstream public API gaps documented with minimal proposals (`docs/UPSTREAM_INTEROP_GAPS.md`): client command discovery, span-free composer reference insertion, trigger-source roster.
 - Known limitation: dsh-keys-palette 0.2.0 defaults `cycle-theme` to `Mod+Shift+K`, which collides with the Palette's frozen `Ctrl+Shift+K` toggle on Windows; rebind on either side.
 
-## 0.1.0 — 2026-09-05
+## 0.1.0 — 2026-09-03
 
 Initial release: DSH-native translucent-glass Universal Palette federating Commands, Models, Sessions and Conversation Hits over the locked public DSH Client APIs, with deterministic context/frecency ranking, zh/en locale following, and real DSH integration acceptance on Windows.

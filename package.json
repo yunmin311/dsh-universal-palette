@@ -2,9 +2,10 @@
   "name": "@yunmin311/dsh-universal-palette",
   "version": "0.2.0",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
-  "description": "Dense translucent-glass Universal Palette for DeepSeek Harness Web — federates Commands, Models, Sessions, Conversation Hits with rich secondary actions and deterministic context/frecency ranking.",
+  "description": "Dense translucent-glass Universal Palette for DeepSeek Harness Web — federates Commands, Models, Sessions and Conversation Hits with deterministic ranking and verified public-contract interoperability.",
   "license": "MIT",
   "type": "module",
   "main": "./lib/index.js",
