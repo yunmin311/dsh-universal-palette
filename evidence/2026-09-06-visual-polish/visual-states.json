@@ -1,0 +1,79 @@
+{
+  "dsh": "0.1.2-rc.1",
+  "states": {
+    "A-no-session": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 343,
+      "pointer": {
+        "root": "none",
+        "surface": "auto"
+      },
+      "composerY": 430,
+      "overlapsComposer": true,
+      "scrollAtOpen": []
+    },
+    "B-empty-session": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 535,
+      "pointer": {
+        "root": "none",
+        "surface": "auto"
+      },
+      "composerY": 430,
+      "overlapsComposer": true,
+      "scrollAtOpen": []
+    },
+    "C-first-turn": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 535,
+      "pointer": {
+        "root": "none",
+        "surface": "auto"
+      },
+      "composerY": 782,
+      "overlapsComposer": false,
+      "scrollAtOpen": []
+    },
+    "D-long-scroll-bottom": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 535,
+      "pointer": {
+        "root": "none",
+        "surface": "auto"
+      },
+      "composerY": 791,
+      "overlapsComposer": false,
+      "scrollAtOpen": [
+        {
+          "cls": "wSkVaW_scrollBody",
+          "top": 192,
+          "sh": 1012,
+          "ch": 820
+        }
+      ]
+    }
+  },
+  "errors": [],
+  "pointerThrough": true,
+  "consistency": {
+    "xUnique": [
+      736
+    ],
+    "widthUnique": [
+      600
+    ],
+    "yRange": [
+      89.59375,
+      89.59375
+    ],
+    "allOverlapComposer": false
+  }
+}

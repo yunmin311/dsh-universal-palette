@@ -5,6 +5,7 @@
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![DSH](https://img.shields.io/badge/DSH-0.1.2--rc.1-2962ff.svg)](docs/COMPATIBILITY.md)
 [![node](https://img.shields.io/node/v/%40yunmin311/dsh-universal-palette.svg)](package.json)
+[![CI](https://github.com/yunmin311/dsh-universal-palette/actions/workflows/ci.yml/badge.svg)](https://github.com/yunmin311/dsh-universal-palette/actions/workflows/ci.yml)
 
 Language: English | [简体中文](README.zh-CN.md)
 
@@ -76,6 +77,17 @@ Interoperability is verified against real installed plugins — see the [interop
 - **No private coupling.** Session Workbench and Reference Anything publish no public handoff API; the Palette integrates nothing beyond coexistence and documents upstream gaps instead of hacking around them.
 
 This is not "supports all plugins" — only the contracts above are consumed, capability-detected, with zero behavior change when absent.
+
+## For plugin authors
+
+Universal Palette federates DSH's public contracts — you do not integrate with the Palette to become visible in it.
+
+- **Host commands**: register through DSH's official Host command contract (`ctx.commands.register`) and the Palette discovers you automatically from the live catalog on every query. No Palette dependency, no adapter, no release coordination.
+- **Deeper interoperability**: an optional, capability-detected adapter is considered only when your plugin exposes a stable public Cordis service. It must be zero-impact when your plugin is absent and lifecycle-safe when it unloads. The working example is dsh-keys-palette's public `keys.actions` registry, which the Palette uses to contribute one bindable "open" action.
+- **Client-only `commandUi` commands, private registries, DOM state, and internal routes are off the table** — the Palette keeps plain coexistence there and waits for a public API ([upstream gaps](docs/UPSTREAM_INTEROP_GAPS.md)).
+- **Session / reference / workspace plugins**: the same rule applies. A public handoff service or official contract is the only path into Palette secondary integrations; no public seam means `WAIT_PUBLIC_API`.
+
+Universal Palette currently has no Provider SDK, and none is planned. The preferred ecosystem path is: **register with DSH, and the Palette federates public contracts.** Details and verified cases: [interoperability matrix](docs/INTEROPERABILITY_MATRIX.md).
 
 ## Compatibility
 

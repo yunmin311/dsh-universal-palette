@@ -5,6 +5,7 @@
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![DSH](https://img.shields.io/badge/DSH-0.1.2--rc.1-2962ff.svg)](docs/COMPATIBILITY.md)
 [![node](https://img.shields.io/node/v/%40yunmin311/dsh-universal-palette.svg)](package.json)
+[![CI](https://github.com/yunmin311/dsh-universal-palette/actions/workflows/ci.yml/badge.svg)](https://github.com/yunmin311/dsh-universal-palette/actions/workflows/ci.yml)
 
 English | [简体中文](README.zh-CN.md) · Language: 简体中文
 
@@ -76,6 +77,17 @@ dsh --profile web
 - **无私有耦合。** Session Workbench 与 Reference Anything 目前没有公开 handoff API；Palette 不做超出共存范围的集成，并把 upstream gap 记录在案而不是绕过。
 
 这不是"支持所有插件"——只消费上述契约，全部能力检测，插件不存在时零行为变化。
+
+## 给插件作者
+
+Universal Palette 联合的是 DSH 的公开契约——想出现在面板里，不需要和 Palette 集成。
+
+- **Host 命令**：通过 DSH 官方 Host 命令契约（`ctx.commands.register`）注册即可，Palette 每次查询都会从实时目录自动发现你。无需依赖 Palette、无需 adapter、无需协调发版。
+- **更深的互操作**：只有当你的插件暴露稳定公开 Cordis service 时，才会考虑做可选的、按能力检测的 adapter；插件未安装时必须零影响、卸载时生命周期正确。现行正例是 dsh-keys-palette 的公开 `keys.actions` registry——Palette 借它贡献了一个可绑定快捷键的"打开面板"action。
+- **Client-only `commandUi` 命令、私有 registry、DOM 状态、内部路由均不接入**——这些场景保持共存关系，等待公开 API（[upstream gaps](docs/UPSTREAM_INTEROP_GAPS.md)）。
+- **会话 / 引用 / 工作区类插件同理**：公开 handoff service 或官方契约是进入 Palette 二级集成的唯一路径；没有公开 seam 即 `WAIT_PUBLIC_API`。
+
+Universal Palette 目前没有 Provider SDK，也没有相关计划。推荐的生态路径是：**向 DSH 注册，Palette 联合公开契约。**细节与已验证案例见[互操作矩阵](docs/INTEROPERABILITY_MATRIX.md)。
 
 ## 兼容性
 
