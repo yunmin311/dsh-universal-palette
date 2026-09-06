@@ -44,6 +44,13 @@ export interface PaletteItem {
   readonly subtitle?: string
   readonly snippet?: string
   readonly keywords?: readonly string[]
+  readonly aliases?: readonly string[]
+  /** Display provenance, independent of internal provider ids; no SDK contract. */
+  readonly source?: string
+  readonly updatedAt?: number
+  /** Authoritative current-session row; display labels are not identity. */
+  readonly isCurrent?: boolean
+  readonly workspaceTitle?: string
   readonly badges?: readonly string[]
   readonly primary: PaletteAction
   readonly secondary?: readonly PaletteAction[]

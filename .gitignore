@@ -9,4 +9,7 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Playwright traces can contain local DSH authentication URLs.
+evidence/**/local-only-trace.zip
+
 lib/

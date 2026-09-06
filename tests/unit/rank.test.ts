@@ -14,6 +14,20 @@ const basePrefs = {
   shortcut: 'Ctrl+Shift+K',
 }
 
+for (const [query, expected] of [
+  ['goal', ['goal']], ['permission', ['permission']], ['flash', ['flash']], ['cobalt-otter-904', ['hit']],
+] as const) test(`relevance regression: ${query} excludes unrelated models and sessions even when pinned`, () => {
+  const rows = [
+    item({id:'goal',kind:'command',title:'/goal'}),
+    item({id:'permission',kind:'command',title:'/permission'}),
+    item({id:'pro',kind:'model',title:'DeepSeek-V4-Pro',subtitle:'Stronger agentic coding, knowledge, and difficult reasoning; suited to complex or quality-critical tasks at higher cost.'}),
+    item({id:'flash',kind:'model',title:'DeepSeek-V4-Flash'}),
+    item({id:'session',kind:'session',title:'Unrelated conversation',subtitle:'a goal for later'}),
+    item({id:'hit',kind:'conversation-hit',title:'Smoke history',snippet:'The cobalt-otter-904 conversation',keywords:['The cobalt-otter-904 conversation']}),
+  ]
+  assert.deepEqual(rankItems(rows,{query,context:{},preferences:{...basePrefs,pins:{pro:1,session:1}},now:Date.now(),actionsHint:false}).map(r=>r.item.id),expected)
+})
+
 function item(partial: Partial<PaletteItem>): PaletteItem {
   return {
     id: partial.id ?? 'x',
@@ -24,6 +38,14 @@ function item(partial: Partial<PaletteItem>): PaletteItem {
     ...partial,
   }
 }
+
+test('cold-start Recent sessions keeps catalog rows without context, pins or prior palette use', () => {
+  const ranked = rankItems([item({id:'s1',kind:'session',title:'Existing conversation'})], {
+    query:'', context:{}, preferences:basePrefs, now:Date.now(), actionsHint:false,
+  })
+  assert.equal(ranked.length, 1)
+  assert.equal(ranked[0]!.item.id, 's1')
+})
 
 test('empty query returns context+frecency+pinned items', () => {
   const items: PaletteItem[] = [

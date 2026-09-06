@@ -2,6 +2,8 @@
 
 Universal Palette for DeepSeek Harness Web.
 
+**2026-09-05 Design Gate:** the user accepted the overall direction and authorized commit/push after the final Session identity dedupe. Search, glass, locale and layout are frozen. The [authoritative design contract](docs/DESIGN_CONTRACT.md) records the future v0.2 interoperability direction; no v0.2 adapter is included. See the [current report](IMPLEMENTATION_REPORT.md) and [latest Windows evidence](evidence/2026-09-05-design-gate/SMOKE.md).
+
 ## Compatibility
 
 This release is locked to:
@@ -18,7 +20,7 @@ dsh plugin --profile web add "<repository-path>"
 dsh --profile web
 ```
 
-Press `Ctrl+Shift+K` on Windows/Linux or `Cmd+Shift+K` on macOS.
+Press `Ctrl+Shift+K` on Windows/Linux or `Cmd+Shift+K` on macOS to toggle. Escape closes Actions first, then the Palette. Outside clicks close and pass through to DSH.
 
 ## Real DSH integration
 
@@ -32,7 +34,7 @@ The browser plugin uses the locked public Client APIs directly:
 
 The package keeps the official lazy-CJS browser artifact at `lib/client.js`. The Cordis patch inserts the plugin row and configures `session-query-sqlite` with `path: !!js dshHomePath('session-query.sqlite')` plus `openAt: first-search`.
 
-## Verified smoke
+## Historical adapter smoke (superseded for UX acceptance)
 
 On 2026-09-04, an isolated `DSH_HOME` with DSH `0.1.2-rc.1` completed:
 

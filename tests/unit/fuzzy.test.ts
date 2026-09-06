@@ -34,3 +34,8 @@ test('no match returns zero', () => {
   const r = matchItem('zzzzzz', { title: 'compact' })
   assert.equal(r.score, 0)
 })
+
+test('slash-only query is a command prefix, not an empty query matching every model', () => {
+  assert.equal(matchItem('/',{title:'DeepSeek-V4-Pro'}).score,0)
+  assert.ok(matchItem('/',{title:'/goal'}).score >= 0.9)
+})

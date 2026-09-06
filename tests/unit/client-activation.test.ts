@@ -1,11 +1,22 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { apply, inject } from '../../src/client/index.ts'
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import ts from 'typescript'
+const source = new URL('../../src/client/index.ts', import.meta.url)
+const realRequire = createRequire(source)
+const module = { exports: {} as typeof import('../../src/client/index.ts') }
+const code = ts.transpileModule(readFileSync(source, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
+// Activation does not render. Keep the JSX renderer at its actual browser boundary.
+new Function('require', 'module', 'exports', code)((id: string) => id.endsWith('.tsx') ? {} : realRequire(id), module, module.exports)
+const { apply, inject } = module.exports
 
 test('client activation waits for shell.overlay and registers a two-argument list entry', () => {
   const calls: unknown[][] = []
   const ctx = {
+    effect(fn: () => unknown) { fn() },
+    locale: {register() { return () => {} }},
     remote: { commands: {} },
     sessions: {},
     workspaces: {},
@@ -30,10 +41,14 @@ test('client activation waits for shell.overlay and registers a two-argument lis
     'workspaces',
     'modelDirectories',
     'slots',
+    'uiWorkspace',
+    'inputTriggers',
+    'locale',
   ])
-  assert.equal(calls[0]?.[0], 'inject')
-  assert.equal(calls[0]?.[1], 'shell.overlay')
-  assert.equal(calls[1]?.[0], 'register')
-  assert.deepEqual(calls[1]?.[1], { name: 'shell.overlay', id: 'dsh-universal-palette' })
-  assert.equal(typeof calls[1]?.[2], 'function')
+  const overlayCalls = calls.filter(call => call[1] === 'shell.overlay' || (typeof call[1] === 'object' && call[1]?.name === 'shell.overlay'))
+  assert.equal(overlayCalls[0]?.[0], 'inject')
+  assert.equal(overlayCalls[0]?.[1], 'shell.overlay')
+  assert.equal(overlayCalls[1]?.[0], 'register')
+  assert.deepEqual(overlayCalls[1]?.[1], { name: 'shell.overlay', id: 'dsh-universal-palette' })
+  assert.equal(typeof overlayCalls[1]?.[2], 'function')
 })

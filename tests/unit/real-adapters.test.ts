@@ -177,3 +177,16 @@ test('conversation hits use sessions.search and open the matched session', async
   await items[0]?.primary.run(new AbortController().signal)
   assert.equal(opened, sid('main-session'))
 })
+
+test('official client /model contribution uses the public input-trigger adjudication, not Host execute', async () => {
+  const calls: unknown[] = []
+  const scope = {}
+  const triggers = { sessionOf(actual: unknown) { assert.equal(actual, scope); return { adjudicate: async (...args: unknown[]) => { calls.push(args); return 'handled' } } } }
+  const remote = { list: async () => ({ ok: true, value: [{ name: 'goal', description: 'Goal' }] }), execute: async () => { throw Error('must not execute model on Host') } }
+  const rows = await createCommandsProvider(remote as never, sessions({ scope: () => scope as never }), triggers as never).collect(input, new AbortController().signal)
+  const model = rows.find(row => row.title === '/model')
+  assert.ok(model)
+  await model.primary.run(new AbortController().signal)
+  assert.equal(calls[0][0], '/model')
+  assert.deepEqual(calls[0][2], { images: 0 })
+})

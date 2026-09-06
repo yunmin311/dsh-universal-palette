@@ -45,8 +45,10 @@ export function checkConflicts(shortcut: string): ShortcutReport {
 
 export interface KeyboardOptions {
   readonly shortcut: string
+  readonly isOpen?: () => boolean
   readonly onOpen: () => void
   readonly onClose: () => void
+  readonly onEscape?: () => void
   readonly onConflictDetected?: (report: ShortcutReport) => void
 }
 
@@ -62,12 +64,19 @@ export function attachKeyboard(opts: KeyboardOptions): KeyboardHandle {
   }
 
   function handler(e: KeyboardEvent): void {
-    if (isComposing(e.target)) return
+    if (e.isComposing || isComposing(e.target) || e.repeat) return
+    if (e.key === 'Escape' && opts.isOpen?.()) {
+      e.preventDefault()
+      e.stopPropagation()
+      ;(opts.onEscape ?? opts.onClose)()
+      return
+    }
     const detected = detectShortcut(e)
     if (detected === opts.shortcut) {
       e.preventDefault()
       e.stopPropagation()
-      opts.onOpen()
+      if (opts.isOpen?.()) opts.onClose()
+      else opts.onOpen()
     }
   }
 

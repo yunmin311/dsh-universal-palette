@@ -1,0 +1,186 @@
+{
+  "head": "c1273e7d2d59679566a6a990bdb02cd05d7991ba",
+  "viewport": "1792x896",
+  "checks": [
+    {
+      "name": "A no workspace / no active Session",
+      "status": "PASS",
+      "details": "Real persisted history remains available; clean first-boot screenshot is cold-initial.png."
+    },
+    {
+      "name": "Recent sessions action",
+      "status": "PASS",
+      "details": "Opened the persisted official Session."
+    },
+    {
+      "name": "E Conversation Hit",
+      "status": "PASS",
+      "details": {
+        "sessionId": "session-8a280808-a653-47d2-acc7-77b71a9b9f6c",
+        "query": "cobalt-otter-904"
+      }
+    },
+    {
+      "name": "B workspace / no Session",
+      "status": "PASS",
+      "details": "Select workspace and New session both open through uiWorkspace."
+    },
+    {
+      "name": "C empty query",
+      "status": "PASS",
+      "details": [
+        "session",
+        "command",
+        "model",
+        "command",
+        "model",
+        "command",
+        "model",
+        "command"
+      ]
+    },
+    {
+      "name": "D official Host catalog",
+      "status": "PASS",
+      "details": [
+        "compact",
+        "export",
+        "feedback",
+        "goal",
+        "permission",
+        "plan"
+      ]
+    },
+    {
+      "name": "/goal execution",
+      "status": "PASS"
+    },
+    {
+      "name": "/permission execution",
+      "status": "PASS"
+    },
+    {
+      "name": "/feedback execution",
+      "status": "PASS",
+      "details": "Expected official input-required error is visible; no feedback was submitted."
+    },
+    {
+      "name": "/plan execution",
+      "status": "PASS"
+    },
+    {
+      "name": "/model execution",
+      "status": "PASS",
+      "details": "Official Client slash adjudication opens the native model picker; it is not a Host catalog descriptor."
+    },
+    {
+      "name": "F root Esc / restored focus",
+      "status": "PASS"
+    },
+    {
+      "name": "G shortcut toggle",
+      "status": "PASS"
+    },
+    {
+      "name": "H workspace click pass-through / editing after close",
+      "status": "PASS"
+    },
+    {
+      "name": "H/J sidebar pass-through and responsive position",
+      "status": "PASS",
+      "details": {
+        "root": "none",
+        "surface": "auto"
+      }
+    },
+    {
+      "name": "No matching query has specific guidance",
+      "status": "PASS"
+    },
+    {
+      "name": "I official theme settings / inherited menu and text tokens",
+      "status": "PASS",
+      "details": {
+        "浅色": {
+          "background": "color(srgb 1 1 1 / 0.9)",
+          "color": "rgb(15, 17, 21)",
+          "menu": "#fff",
+          "blur": "blur(18px)"
+        },
+        "深色": {
+          "background": "color(srgb 0.207843 0.211765 0.219608 / 0.9)",
+          "color": "rgb(249, 250, 251)",
+          "menu": "#353638",
+          "blur": "blur(18px)"
+        }
+      }
+    },
+    {
+      "name": "No browser page errors",
+      "status": "PASS"
+    }
+  ],
+  "screenshots": {
+    "01-no-session": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 340.5
+    },
+    "04-conversation-hit": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 156.5
+    },
+    "workspace-no-session": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 340.5
+    },
+    "02-empty-query": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 502.5
+    },
+    "03-goal-results": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 190.5
+    },
+    "sidebar-collapsed": {
+      "x": 624,
+      "y": 89.59375,
+      "width": 600,
+      "height": 502.5
+    },
+    "sidebar-expanded": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 502.5
+    },
+    "no-results": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 172
+    },
+    "theme-light": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 502.5
+    },
+    "theme-dark": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 502.5
+    }
+  },
+  "errors": []
+}

@@ -21,6 +21,9 @@
  * build` does not need two separate build invocations.
  */
 import { defineConfig, type UserConfig } from 'tsdown'
+import { readFile } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
+import { transform } from 'lightningcss'
 
 const ID = '@yunmin311/dsh-universal-palette'
 
@@ -86,6 +89,23 @@ const clientConfig: UserConfig = {
     'import.meta.env': JSON.stringify({ MODE: process.env.NODE_ENV ?? 'production' }),
   },
   plugins: [
+    // Adapted from DSH packages/client/tsdown.client.ts (MIT, locked SHA).
+    // Export text for React-owned style lifetime instead of a global DOM injector.
+    {
+      name: 'dsh-css-modules-inline',
+      resolveId(source, importer) {
+        if (!source.endsWith('.module.css')) return null
+        return '\0up-css:' + resolve(dirname(importer!), source) + '.mjs'
+      },
+      async load(id) {
+        if (!id.startsWith('\0up-css:')) return null
+        const file = id.slice('\0up-css:'.length, -4)
+        this.addWatchFile(file)
+        const result = transform({ filename: file, code: await readFile(file), cssModules: { pattern: 'up_[hash]_[local]' }, minify: true })
+        const classes = Object.fromEntries(Object.entries(result.exports ?? {}).map(([key, value]) => [key, value.name]))
+        return `export default ${JSON.stringify(classes)}; export const cssText = ${JSON.stringify(result.code.toString())};`
+      },
+    },
     {
       name: 'dsh-universal-palette-bundle-purity',
       resolveId(source: string) {

@@ -1,4 +1,5 @@
 import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
+import type { InputTriggerServiceContract } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type {
   ISessions,
   SessionBinding,
@@ -68,6 +69,7 @@ function remoteError(operation: string, result: { error: { code: string; message
 export function createCommandsProvider(
   remote: CommandRemote,
   sessions: ISessions,
+  inputTriggers?: InputTriggerServiceContract,
 ): PaletteProvider {
   return {
     id: 'commands',
@@ -79,8 +81,24 @@ export function createCommandsProvider(
       const result = await remote.list(current.id)
       if (!result.ok) throw remoteError('commands.list', result)
       if (signal.aborted) return EMPTY_ITEMS
-      return result.value.slice(0, input.limit).map(descriptor =>
+      const items = result.value.map(descriptor =>
         commandItem(remote, current.id, descriptor, input.context))
+      // The locked, required ui-model-selection plugin registers /model on the
+      // Client only (src/client/index.ts), not in remote.commands.list.
+      // Invoke its official slash pipeline; never synthesize a Host descriptor.
+      const scope = inputTriggers && sessions.scope(current.id)
+      if (inputTriggers && scope && !result.value.some(command => command.name === 'model')) {
+        items.push({
+          id: 'commands:client:model', providerId: 'commands', kind: 'command',
+          title: '/model', subtitle: 'Open DSH model selector', badges: ['DSH'],
+          context: { ...input.context, sessionId: String(current.id) },
+          primary: { id: 'open-model-selector', title: 'Open', async run(signal) {
+            const outcome = await inputTriggers.sessionOf(scope).adjudicate('/model', signal, { images: 0 })
+            if (outcome !== 'handled') throw new Error('The DSH /model UI command is unavailable in this Session.')
+          } },
+        })
+      }
+      return items
     },
   }
 }
@@ -97,6 +115,8 @@ function commandItem(
     providerId: 'commands',
     kind: 'command',
     title: line,
+    aliases: [descriptor.name],
+    source: 'DSH',
     subtitle: descriptor.description,
     keywords: descriptor.input === undefined ? undefined : [descriptor.input.hint],
     primary: {
@@ -172,6 +192,8 @@ function sessionItem(
     providerId: 'sessions',
     kind: 'session',
     title: summary.displayTitle,
+    updatedAt: summary.updatedAt,
+    isCurrent: current,
     subtitle: [current ? 'current' : undefined, summary.running ? 'running' : 'idle', summary.cwd]
       .filter((part): part is string => part !== undefined)
       .join(' · '),
@@ -244,6 +266,7 @@ function modelItem(
     providerId: 'models',
     kind: 'model',
     title: model.name,
+    source: group.name,
     subtitle: model.description === undefined ? group.name : `${group.name} · ${model.description}`,
     keywords: [group.id, model.id],
     badges: current ? ['current'] : reasoningEffort === undefined ? undefined : [reasoningEffort],
@@ -281,7 +304,10 @@ export function createConversationHitsProvider(sessions: ISessions): PaletteProv
         providerId: 'conversation-hits',
         kind: 'conversation-hit',
         title: sessions.list.getSnapshot().byId[hit.sessionId]?.displayTitle
-          ?? `Session ${String(hit.sessionId).slice(0, 8)}`,
+          ?? '',
+        updatedAt: sessions.list.getSnapshot().byId[hit.sessionId]?.updatedAt,
+        workspaceTitle: sessions.list.getSnapshot().byId[hit.sessionId]?.cwd?.split(/[\\/]/).filter(Boolean).at(-1),
+        source: 'DSH',
         subtitle: 'history hit',
         snippet: hit.snippet,
         keywords: [hit.snippet],

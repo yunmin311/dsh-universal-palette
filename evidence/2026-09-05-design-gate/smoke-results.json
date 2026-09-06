@@ -1,0 +1,233 @@
+{
+  "head": "c1273e7d2d59679566a6a990bdb02cd05d7991ba",
+  "viewport": "1792x896",
+  "checks": [
+    {
+      "name": "A no workspace / no active Session",
+      "status": "PASS",
+      "details": "Chinese guidance with real persisted history available."
+    },
+    {
+      "name": "Recent sessions action",
+      "status": "PASS",
+      "details": "Opened the persisted official Session."
+    },
+    {
+      "name": "E Conversation Hit",
+      "status": "PASS",
+      "details": {
+        "sessionId": "session-8a280808-a653-47d2-acc7-77b71a9b9f6c",
+        "query": "cobalt-otter-904"
+      }
+    },
+    {
+      "name": "B workspace / no Session",
+      "status": "PASS",
+      "details": "Select workspace and New session both open through uiWorkspace."
+    },
+    {
+      "name": "C empty query",
+      "status": "PASS",
+      "details": [
+        "session",
+        "session",
+        "session",
+        "command",
+        "command",
+        "command",
+        "model",
+        "model"
+      ]
+    },
+    {
+      "name": "Empty query stable Session identity dedupe / Current first",
+      "status": "PASS",
+      "details": [
+        "session-a13215f9-8959-4cfb-a728-aef25765d683",
+        "session-bfe73110-e56b-4cf2-b167-e2d1ec7d5d8f",
+        "session-630d3129-c450-4426-a34c-75d850c83822"
+      ]
+    },
+    {
+      "name": "Relevance goal",
+      "status": "PASS",
+      "details": [
+        "//goal设置或查看长期任务目标"
+      ]
+    },
+    {
+      "name": "Relevance permission",
+      "status": "PASS",
+      "details": [
+        "//permission查看或切换权限预设"
+      ]
+    },
+    {
+      "name": "Relevance flash",
+      "status": "PASS",
+      "details": [
+        "DeepSeek-V4-FlashDeepSeek · 选择此模型当前",
+        "DeepSeek-V4-Flash-Vision-ExpDeepSeek · 选择此模型高"
+      ]
+    },
+    {
+      "name": "D official Host catalog",
+      "status": "PASS",
+      "details": [
+        "compact",
+        "export",
+        "feedback",
+        "goal",
+        "permission",
+        "plan"
+      ]
+    },
+    {
+      "name": "/goal execution",
+      "status": "PASS"
+    },
+    {
+      "name": "/permission execution",
+      "status": "PASS"
+    },
+    {
+      "name": "/feedback execution",
+      "status": "PASS",
+      "details": "Expected official input-required error is visible; no feedback was submitted."
+    },
+    {
+      "name": "/plan execution",
+      "status": "PASS"
+    },
+    {
+      "name": "/model execution",
+      "status": "PASS",
+      "details": "Official Client slash adjudication opens the native model picker; it is not a Host catalog descriptor."
+    },
+    {
+      "name": "F root Esc / restored focus",
+      "status": "PASS"
+    },
+    {
+      "name": "G shortcut toggle",
+      "status": "PASS"
+    },
+    {
+      "name": "H workspace click pass-through / editing after close",
+      "status": "PASS"
+    },
+    {
+      "name": "H/J sidebar pass-through and responsive position",
+      "status": "PASS",
+      "details": {
+        "root": "none",
+        "surface": "auto"
+      }
+    },
+    {
+      "name": "No matching query has specific guidance",
+      "status": "PASS"
+    },
+    {
+      "name": "I official theme settings / inherited menu and text tokens",
+      "status": "PASS",
+      "details": {
+        "浅色": {
+          "background": "color(srgb 1 1 1 / 0.76)",
+          "color": "rgb(15, 17, 21)",
+          "menu": "#fff",
+          "blur": "blur(22px) saturate(1.12)"
+        },
+        "深色": {
+          "background": "color(srgb 0.207843 0.211765 0.219608 / 0.76)",
+          "color": "rgb(249, 250, 251)",
+          "menu": "#353638",
+          "blur": "blur(22px) saturate(1.12)"
+        }
+      }
+    },
+    {
+      "name": "Locale changes live without rebuilding input",
+      "status": "PASS"
+    },
+    {
+      "name": "No browser page errors",
+      "status": "PASS"
+    }
+  ],
+  "screenshots": {
+    "01-no-session": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 342.5
+    },
+    "04-conversation-hit": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 158.5
+    },
+    "workspace-no-session": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 434.5
+    },
+    "02-empty-query": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 534.5
+    },
+    "03-goal-results": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 146.5
+    },
+    "sidebar-collapsed": {
+      "x": 624,
+      "y": 89.59375,
+      "width": 600,
+      "height": 534.5
+    },
+    "sidebar-expanded": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 534.5
+    },
+    "no-results": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 174
+    },
+    "theme-light": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 534.5
+    },
+    "theme-dark": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 534.5
+    },
+    "locale-en": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 534.5
+    },
+    "locale-zh": {
+      "x": 736,
+      "y": 89.59375,
+      "width": 600,
+      "height": 534.5
+    }
+  },
+  "errors": []
+}

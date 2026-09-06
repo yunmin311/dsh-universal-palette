@@ -1,7 +1,7 @@
 /**
  * Aggregator-side ranking (spec §7).
  *
- * final = 0.46·text + 0.19·context + 0.15·frecency + 0.10·pin + 0.10·hint
+ * Search: 0.80 text + bounded context/frecency/pin/hint tie breakers.
  *
  * Hard rules (spec §7): exact title and exact alias override jumps a
  * result to positions 1-2 even when the weighted score would put it
@@ -27,11 +27,11 @@ export interface RankedItem {
 }
 
 const WEIGHTS = {
-  text: 0.46,
-  context: 0.19,
-  frecency: 0.15,
-  pin: 0.1,
-  hint: 0.1,
+  text: 0.8,
+  context: 0.08,
+  frecency: 0.06,
+  pin: 0.04,
+  hint: 0.02,
 } as const
 
 function contextScore(item: PaletteItem, ctx: PaletteContext): number {
@@ -86,11 +86,12 @@ export function rankItems(items: readonly PaletteItem[], input: RankInput): Rank
       title: item.title,
       subtitle: item.subtitle,
       keywords: item.keywords,
-      aliases: undefined,
+      aliases: item.aliases,
+      snippet: item.snippet,
     })
     const text = match.score
     const ctx = contextScore(item, input.context)
-    const freq = frecencyScore(input.preferences.frecency[item.id], input.now)
+    const freq = Math.min(1, frecencyScore(input.preferences.frecency[item.id], input.now))
     const pin = pinBoost(item.id, input.preferences)
     const hint = providerHintScore(item, input.actionsHint, false)
 
@@ -104,22 +105,9 @@ export function rankItems(items: readonly PaletteItem[], input: RankInput): Rank
     return { item, score: final, match }
   })
 
-  scored.sort((a, b) => b.score - a.score)
+  scored.sort((a, b) => (!empty ? Number(b.match.score >= 0.9) - Number(a.match.score >= 0.9) : 0) || b.score - a.score)
 
-  if (!empty) {
-    const top = scored.find((s) => s.match.score >= 0.92)
-    if (top) {
-      const idx = scored.indexOf(top)
-      if (idx > 1) {
-        scored.splice(idx, 1)
-        scored.unshift(top)
-      } else if (idx === 1 && scored.length >= 2) {
-        const swap = scored[1]
-        scored[1] = top
-        scored[0] = swap!
-      }
-    }
-  }
-
-  return scored.filter((s) => (empty ? s.score > 0 : s.match.score > 0))
+  // Context/frecency order empty-query rows; zero is not unavailability.
+  // In particular, cold-start Recent sessions must include never-used sessions.
+  return scored.filter((s) => empty || s.match.score >= 0.6)
 }
