@@ -1,11 +1,10 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, type KeyboardEvent } from 'react'
-import { ageText, type PaletteTranslate } from './locales.ts'
+import { useEffect, useLayoutEffect, useRef, type KeyboardEvent } from 'react'
 import { IconSearchOutline16, IconNewChatOutline16, IconFolderOpenOutline16, IconClockOutline16, IconSparkle16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PaletteItem, PaletteAction } from '../shared/contract.ts'
 import css, { cssText } from './UniversalPalette.module.css'
 
 export interface UniversalPaletteProps {
-  readonly t: PaletteTranslate
+  readonly t: (key: string, params?: Record<string, unknown>) => string
   readonly sections?: boolean
   readonly emptyMessage?: string
   readonly onClose: () => void
@@ -13,6 +12,7 @@ export interface UniversalPaletteProps {
   readonly contextHint?: string
   readonly error?: string
   readonly sidebarWide: boolean
+  readonly cold: boolean
   readonly query: string
   readonly isLoading: boolean
   readonly isEmpty: boolean
@@ -28,12 +28,11 @@ export interface UniversalPaletteProps {
   readonly actionPanelSelectedIndex: number
   readonly onActionPanelIndexChange: (next: number) => void
   readonly conflicts: readonly string[]
+  readonly rootDataAttributes?: Readonly<Record<string, string>>
 }
 
-
-/** Stable React input; DSH retains ownership of all catalog and navigation data. */
+/** Stable, presentation-agnostic renderer shared by Floating and Morph. */
 export function UniversalPalette(props: UniversalPaletteProps) {
-  const t = props.t
   const surface = useRef<HTMLDivElement>(null)
   const search = useRef<HTMLInputElement>(null)
   const selectedRow = useRef<HTMLDivElement>(null)
@@ -82,15 +81,21 @@ export function UniversalPalette(props: UniversalPaletteProps) {
         break
     }
   }
-  return <div className={css.root} data-plugin="dsh-universal-palette" data-sidebar-wide={props.sidebarWide}>
+  const rootAttrs: Record<string, string> = {
+    'data-plugin': 'dsh-universal-palette',
+    'data-sidebar-wide': String(props.sidebarWide),
+    'data-cold': String(props.cold),
+    'data-presentation': props.rootDataAttributes?.['data-presentation'] ?? 'floating',
+  }
+  return <div className={css.root} {...rootAttrs}>
     <style data-plugin="dsh-universal-palette">{cssText}</style>
-    <div ref={surface} className={css.surface} role="dialog" aria-label={t('palette')}>
+    <div ref={surface} className={css.surface} role="dialog" aria-label={props.t('palette')}>
       <div className={css.search}>
         <IconSearchOutline16 className={css.searchIcon} />
-        <input ref={search} className={css.searchInput} aria-label={t('search')} role="combobox"
+        <input ref={search} className={css.searchInput} aria-label={props.t('search')} role="combobox"
           aria-expanded="true" aria-controls="up-results" aria-autocomplete="list"
           aria-activedescendant={current ? `up-result-${props.selectedIndex}` : undefined}
-          placeholder={t('search')} value={props.query}
+          placeholder={props.t('search')} value={props.query}
           spellCheck={false} autoComplete="off" onKeyDown={keydown}
           onCompositionStart={() => { composing.current = true }}
           onCompositionEnd={event => { composing.current = false; props.onQueryChange(event.currentTarget.value) }}
@@ -101,41 +106,42 @@ export function UniversalPalette(props: UniversalPaletteProps) {
         {props.contextHint && <div className={css.hint}>{props.contextHint}</div>}
       </div>}
       {props.error && <div className={css.error} role="alert">{props.error}</div>}
-      <div className={css.list} id="up-results" role="listbox" aria-label={t('results')}>
+      <div className={css.list} id="up-results" role="listbox" aria-label={props.t('results')}>
         {props.items.length === 0 ? <div className={css.empty} role="status">
-          {props.isLoading ? t('searching') : props.query.trim() ? <>{t('noResults', {query:props.query})}<span>{t('tryAgain')}</span></>
-            : props.emptyMessage ?? t('empty')}
+          {props.isLoading ? props.t('searching') : props.query.trim() ? <>{props.t('noResults', { query: props.query })}<span>{props.t('tryAgain')}</span></>
+            : props.emptyMessage ?? props.t('empty')}
         </div> : props.items.map(({ item }, index) => {
           const Icon = item.kind === 'model' ? IconSparkle16 : item.kind === 'workspace' || item.id === 'startup:workspace' ? IconFolderOpenOutline16
             : item.kind === 'conversation-hit' || item.id === 'startup:recent' ? IconClockOutline16 : IconNewChatOutline16
           const section = item.kind === 'session' ? 'current' : item.kind === 'model' ? 'models' : 'commands'
-          const metadata = item.kind === 'conversation-hit' ? [t('history'), ageText(item.updatedAt,t), item.workspaceTitle].filter(Boolean).join(' · ') : undefined
-          return <Fragment key={item.id}>
-            {props.sections && (index === 0 || props.items[index-1]?.item.kind !== item.kind) && <div className={css.section} role="presentation">{t(section)}</div>}
+          const metadata = item.kind === 'conversation-hit' ? [props.t('history'), item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '', item.workspaceTitle].filter(Boolean).join(' · ') : undefined
+          return <div key={item.id}>
+            {props.sections && (index === 0 || props.items[index - 1]?.item.kind !== item.kind) && <div className={css.section} role="presentation">{props.t(section)}</div>}
             <div ref={index === props.selectedIndex ? selectedRow : undefined}
-            id={`up-result-${index}`} className={`${css.row} ${index === props.selectedIndex ? css.selected : ''} ${item.snippet ? css.historyRow : ''}`}
-            role="option" aria-selected={index === props.selectedIndex} data-kind={item.kind}
-            data-session-id={item.kind === 'session' ? item.context?.sessionId : undefined}
-            onPointerMove={() => { if (props.selectedIndex !== index) props.onSelectedIndexChange(index) }}
-            onMouseDown={event => event.preventDefault()}
-            onClick={() => { props.onSelectedIndexChange(index); props.onRunSecondary(item, item.primary) }}>
-            <span className={css.icon} aria-hidden="true">{item.kind === 'command' ? <span className={css.commandIcon}>/</span> : <Icon />}</span>
-            <div className={css.rowBody}>
-              <div className={css.titleLine}><div className={css.title}>{item.title}</div>{metadata && <span className={css.historyMeta}>{metadata}</span>}</div>
-              {item.snippet ? <div className={css.snippet}>{item.snippet}</div>
-                : item.subtitle && <div className={css.meta}>{item.subtitle}</div>}
+              id={`up-result-${index}`} className={`${css.row} ${index === props.selectedIndex ? css.selected : ''} ${item.snippet ? css.historyRow : ''}`}
+              role="option" aria-selected={index === props.selectedIndex} data-kind={item.kind}
+              data-session-id={item.kind === 'session' ? item.context?.sessionId : undefined}
+              onPointerMove={() => { if (props.selectedIndex !== index) props.onSelectedIndexChange(index) }}
+              onMouseDown={event => event.preventDefault()}
+              onClick={() => { props.onSelectedIndexChange(index); props.onRunSecondary(item, item.primary) }}>
+              <span className={css.icon} aria-hidden="true">{item.kind === 'command' ? <span className={css.commandIcon}>/</span> : <Icon />}</span>
+              <div className={css.rowBody}>
+                <div className={css.titleLine}><div className={css.title}>{item.title}</div>{metadata && <span className={css.historyMeta}>{metadata}</span>}</div>
+                {item.snippet ? <div className={css.snippet}>{item.snippet}</div>
+                  : item.subtitle && <div className={css.meta}>{item.subtitle}</div>}
+              </div>
+              {item.badges?.length ? <span className={css.badge}>{item.badges.join(' · ')}</span> : null}
+              {actions.length > 0 && index === props.selectedIndex && <span className={css.badge}>Tab</span>}
             </div>
-            {item.badges?.length ? <span className={css.badge}>{item.badges.join(' · ')}</span> : null}
-            {actions.length > 0 && index === props.selectedIndex && <span className={css.badge}>Tab</span>}
-          </div></Fragment>
+          </div>
         })}
       </div>
-      {props.actionPanelOpen && current && <div className={css.actionPanel} role="listbox" aria-label={t('actions')}>
+      {props.actionPanelOpen && current && <div className={css.actionPanel} role="listbox" aria-label={props.t('actions')}>
         {actions.map((action, index) => <button key={action.id} className={`${css.action} ${index === props.actionPanelSelectedIndex ? css.selected : ''}`}
           role="option" aria-selected={index === props.actionPanelSelectedIndex} onMouseDown={event => event.preventDefault()}
           onClick={() => props.onRunSecondary(current, action)}>{action.title}</button>)}
       </div>}
-      <div className={css.footer}>{t('footer')}</div>
+      <div className={css.footer}>{props.t('footer')}</div>
     </div>
   </div>
 }

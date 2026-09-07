@@ -21,7 +21,11 @@ export const DEFAULT_PREFERENCES: PalettePreferences = {
 }
 
 export interface PreferencesBackend {
-  load(): Promise<PalettePreferences>
+  /** Load the persisted shape, or `null` when the backend has never
+   *  written anything yet. Returning a fully-formed DEFAULT_PREFERENCES
+   *  would force the migration layer to read a "default" that the user
+   *  never chose; null preserves the fresh-install branch. */
+  load(): Promise<PalettePreferences | null>
   save(prefs: PalettePreferences): Promise<void>
 }
 
@@ -43,14 +47,28 @@ export class PreferencesStore {
   private readonly backend: PreferencesBackend
   private current: PalettePreferences = DEFAULT_PREFERENCES
   private listeners = new Set<() => void>()
+  /** Tracks whether the storage backend has ever returned a saved value;
+   *  a `false` value here means the running PreferencesStore is still on
+   *  DEFAULT_PREFERENCES, so the migration layer can decide whether to
+   *  honor an "existing Ctrl+Shift+K" (Prompt §6) or to fall back to the
+   *  platform default for a fresh install. */
+  private backendHasSavedValue = false
 
   constructor(backend: PreferencesBackend) {
     this.backend = backend
   }
 
   async load(): Promise<void> {
-    this.current = await this.backend.load()
+    const loaded = await this.backend.load()
+    this.backendHasSavedValue = loaded !== null
+    this.current = loaded ?? DEFAULT_PREFERENCES
     this.notify()
+  }
+
+  /** True once the storage backend has confirmed a saved value (a fresh
+   *  install that never wrote anything reports `false`). */
+  hasSavedValue(): boolean {
+    return this.backendHasSavedValue
   }
 
   get snapshot(): PalettePreferences {
@@ -112,14 +130,14 @@ export class PreferencesStore {
 export function createLocalStorageBackend(): PreferencesBackend {
   return {
     async load() {
-      if (typeof localStorage === 'undefined') return DEFAULT_PREFERENCES
+      if (typeof localStorage === 'undefined') return null
       try {
         const raw = localStorage.getItem(STORAGE_KEY)
-        if (!raw) return DEFAULT_PREFERENCES
+        if (!raw) return null
         const parsed = JSON.parse(raw) as Partial<PalettePreferences>
         return { ...DEFAULT_PREFERENCES, ...parsed }
       } catch {
-        return DEFAULT_PREFERENCES
+        return null
       }
     },
     async save(prefs) {

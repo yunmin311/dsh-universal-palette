@@ -15,6 +15,15 @@
 /* Responsive visual estimate, not a reading of the private layout store.
  * Public sidebar footer owner prop supplies only wide/compact, not geometry. */
 .root[data-sidebar-wide='true'] { padding-inline-start: calc(16px + clamp(0px, 16vw, 280px)); }
+/* Cold state (no session, or session with no conversation turns yet):
+ * the cold Floating stays upper-center like the active one (the composer
+ * sits well below this band in the empty layout), but its visible result
+ * area shortens to ~4-5 rows so the bottom never reaches the vertically
+ * centered empty composer. Internal scroll handles longer result sets.
+ * Signal source: official SessionSnapshot.blank; no DOM or private reads. */
+.root[data-cold='true'] { justify-content: center; padding-inline-start: calc(16px + clamp(0px, 4vw, 56px)); padding-inline-end: 16px; }
+.root[data-cold='true'] .surface { width: 540px; max-height: min(60vh, 320px); }
+.root[data-cold='true'] .list { max-height: min(40vh, 240px); }
 .surface {
   pointer-events: auto;
   width: 600px;
