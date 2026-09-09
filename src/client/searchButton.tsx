@@ -25,8 +25,7 @@ export const SEARCH_BUTTON_ID = 'dsh-universal-palette.search'
 export function SearchButton(props: SearchButtonProps) {
   const t = useMemo(() => bindLocale(props.ctx.locale, 'universal-palette'), [props.ctx.locale])
   const onPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
-    // Prevent the input machine from yanking focus away from the button:
-    // the morph will manage focus on its own.
+    // Keep the resident Composer focused: it remains the sole Morph input.
     event.preventDefault()
   }
   return (

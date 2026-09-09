@@ -7,9 +7,8 @@
  * - exposes exactly one candidate, `find`, on the `/` trigger;
  * - rejects any other slash text by reporting `undefined` so the
  *   pipeline keeps its normal flow;
- * - on `matchEnter` admits exact `/find` as a local public command claim;
- *   its successful submit opens the palette and lets the Host clear the draft
- *   without sending text to the Agent;
+ * - selecting or typing `/find ` enters a public command claim whose trailing
+ *   query remains in the resident Composer and never reaches the Agent;
  * - is capability-detected: when the slash pipeline is absent the
  *   registration fails loudly at startup, so a host that does not
  *   support slash sources will not silently downgrade.
@@ -23,6 +22,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { InputTriggerSource, InputTriggerCandidate, PickOutcome, ClientSessionContext, SubmitEnvelope } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { SearchController } from './search-controller.ts'
+import type { PreferencesStore } from './state/preferences.ts'
 
 export const FIND_PALETTE_CLAIM = 'universal-palette.find'
 export const FIND_TRIGGER = '/'
@@ -74,8 +74,35 @@ export async function findHostFindCollisions(ctx: Context): Promise<readonly str
  * single candidate `find`, accepts exact `/find` Enter arbitration, and
  * otherwise returns `undefined` so the normal pipeline continues.
  */
-export function createFindSource(open: () => void): InputTriggerSource {
+export function createFindSource(
+  open: () => void,
+  executeSelected: (query: string) => Promise<boolean> = async () => false,
+  canClaim: () => boolean = () => true,
+): InputTriggerSource {
   const openAfterHostSettles = () => { globalThis.setTimeout(open, 0) }
+  const enterSearchMode = (): PickOutcome => {
+    openAfterHostSettles()
+    // Locked DSH's hero variant cannot mount the Composer Morph. Preserve the
+    // approved compact-Floating fallback and avoid leaving a hidden claim in
+    // the hero Composer after the Floating surface closes.
+    if (!canClaim()) return { text: '' }
+    return {
+      claim: {
+        // Trailing space is intentional: Space selection is consumed by the
+        // Host, while the visible token remains a stable command prefix.
+        token: '/find ',
+        hint: 'Search',
+        async submit(args) {
+          try {
+            const ran = await executeSelected(args.trimStart())
+            return ran ? { kind: 'success' } : { kind: 'error', text: 'No search result selected.' }
+          } catch (error) {
+            return { kind: 'error', text: error instanceof Error ? error.message : String(error) }
+          }
+        },
+      },
+    }
+  }
   return {
     trigger: FIND_TRIGGER,
     name: FIND_NAME,
@@ -84,27 +111,21 @@ export function createFindSource(open: () => void): InputTriggerSource {
     async candidates(_session: ClientSessionContext): Promise<readonly InputTriggerCandidate[]> {
       return [{
         name: 'find',
-        description: 'Open the Universal Palette search',
+        description: 'Search commands, sessions, models, and conversations',
         icon: 'folder',
         value: 'find',
       }]
     },
     onPick(): PickOutcome {
-      openAfterHostSettles()
-      return { text: '' }
+      return enterSearchMode()
+    },
+    matchSpace(_session: ClientSessionContext, token: string): PickOutcome {
+      return token === '/find' ? enterSearchMode() : undefined
     },
     async matchEnter(_session: ClientSessionContext, line: string, _signal: AbortSignal, _envelope: SubmitEnvelope): Promise<PickOutcome> {
       const trimmed = line.trim()
-      if (trimmed !== '/find') return undefined
-      return {
-        claim: {
-          token: '/find',
-          async submit() {
-            openAfterHostSettles()
-            return { kind: 'success' }
-          },
-        },
-      }
+      if (trimmed !== '/find' && !trimmed.startsWith('/find ')) return undefined
+      return enterSearchMode()
     },
   }
 }
@@ -112,6 +133,7 @@ export function createFindSource(open: () => void): InputTriggerSource {
 export interface RegisterFindSourceOptions {
   readonly ctx: Context
   readonly controller: SearchController
+  readonly preferences?: PreferencesStore
 }
 
 /**
@@ -131,7 +153,20 @@ export async function registerFindSource(options: RegisterFindSourceOptions): Pr
   const open = () => {
     const id = options.ctx.sessions?.list?.getSnapshot?.()?.current
     if (id === undefined) return
-    options.controller.openComposerSearch(String(id))
+    options.controller.openComposerSearch(String(id), 'slash')
+  }
+  const executeSelected = async (query: string) => {
+    if (options.controller.getState().draft !== query) {
+      options.controller.setDraft(query)
+    }
+    const state = options.controller.getState()
+    if (state.aggregator.query !== query.trim()) return false
+    const row = state.aggregator.items[Math.min(state.selectedIndex, Math.max(0, state.aggregator.items.length - 1))]
+    if (!row) return false
+    await options.preferences?.recordUse(row.item.id)
+    await row.item.primary.run(new AbortController().signal)
+    if (row.item.primary.stayOpen !== true) options.controller.close()
+    return true
   }
   const triggers = (options.ctx as unknown as { inputTriggers?: { registerSource?: (src: InputTriggerSource) => () => void } }).inputTriggers
   const registerSource = triggers?.registerSource
@@ -141,7 +176,7 @@ export async function registerFindSource(options: RegisterFindSourceOptions): Pr
   }
   // Preserve `this` binding: registerSource uses `this.live` internally.
   return options.ctx.effect(
-    () => registerSource.call(triggers, createFindSource(open)),
+    () => registerSource.call(triggers, createFindSource(open, executeSelected, () => !options.controller.cold())),
     'universal-palette: /find input trigger source',
   )
 }

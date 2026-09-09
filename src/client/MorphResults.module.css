@@ -1,0 +1,87 @@
+/* Native Composer result surface. Values follow locked DSH MenuView.module.css
+ * at upstream 76fda729799fe9b3848dbe2c211d4b231032b81e. */
+.root {
+  pointer-events: none;
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  color: var(--dsw-alias-label-primary);
+  font: 14px/22px var(--dsw-font-family);
+}
+.surface {
+  pointer-events: auto;
+  width: 100%;
+  max-height: min(320px, 48vh);
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 4px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--dsw-specific-menu);
+  box-shadow: var(--dsw-elevation-prominent);
+}
+.list {
+  max-height: min(312px, 48vh);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dsw-alias-scrollbar-bg-l2) transparent;
+}
+.list::-webkit-scrollbar { width: 6px; }
+.list::-webkit-scrollbar-track { background: transparent; }
+.list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--dsw-alias-scrollbar-bg-l2);
+}
+.list::-webkit-scrollbar-thumb:hover { background: var(--dsw-alias-scrollbar-hover-l2); }
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.row:hover, .selected { background: var(--dsw-alias-interactive-bg-hover); }
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+.commandIcon { font: 15px/16px var(--ds-font-family-code); }
+.title {
+  max-width: 40%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.description {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary);
+}
+.type {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  letter-spacing: .04em;
+}
+.state {
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  color: var(--dsw-alias-label-tertiary);
+}
+.error { color: var(--dsw-alias-state-error-primary); }
+@media (prefers-reduced-motion: reduce) { .row { scroll-behavior: auto; } }

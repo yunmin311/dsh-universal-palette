@@ -15,6 +15,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type {} from '@deepseek-ai/dsh-client-ui-model-selection/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { InputActions, InputState } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 import { PaletteAggregator } from './aggregator.ts'
 import {
@@ -237,8 +238,9 @@ function applyInternal(ctx: Context): void {
   ctx.slots.inject('conversation.input.overlay', () => ctx.slots.register({
     name: 'conversation.input.overlay',
     id: 'dsh-universal-palette-morph-active',
-  }, (props: { sessionId: string }) => createElement(Morph, {
+  }, (props: { sessionId: string; useInput: <T>(selector: (state: InputState) => T) => T; inputActions: InputActions }) => createElement(Morph, {
     ctx, sessionId: props.sessionId, controller, sidebar, aggregator, preferences, cold,
+    useInput: props.useInput, inputActions: props.inputActions,
   })))
 
   // Composer Search button — strict per-Session scope, list-kind. When
@@ -260,7 +262,7 @@ function applyInternal(ctx: Context): void {
   ctx.effect(() => {
     let cancelled = false
     let disposer: (() => void) | null = null
-    registerFindSource({ ctx, controller }).then((d) => {
+    registerFindSource({ ctx, controller, preferences }).then((d) => {
       if (cancelled) { try { d() } catch { /* ignore */ } return }
       disposer = d
     }).catch((error) => {

@@ -14,15 +14,16 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
+import type { InputActions, InputState } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { NS, presentItem } from './locales.ts'
 import type { PaletteAggregator } from './aggregator.ts'
 import type { PreferencesStore } from './state/preferences.ts'
 import type { SidebarObservable } from './sidebarState.ts'
 import { SearchController } from './search-controller.ts'
 import type { ColdObservable } from './cold.ts'
-import { UniversalPalette } from './UniversalPalette.tsx'
-import { prepareView, localizedError, type PreparedView } from './paletteSurface.tsx'
-import type { PaletteAction, PaletteItem } from '../shared/contract.ts'
+import { MorphResults } from './MorphResults.tsx'
+import { composerSearchQuery } from './morphPresentation.ts'
+import { localizedError } from './paletteSurface.tsx'
 
 export interface MorphProps {
   readonly ctx: Context
@@ -32,6 +33,8 @@ export interface MorphProps {
   readonly preferences: PreferencesStore
   readonly cold: ColdObservable
   readonly controller: SearchController
+  readonly useInput: <T>(selector: (state: InputState) => T) => T
+  readonly inputActions: InputActions
 }
 
 /**
@@ -42,7 +45,6 @@ export interface MorphProps {
 export function Morph(props: MorphProps) {
   const locale = useSyncExternalStore(fn => props.ctx.locale.subscribe(fn), () => props.ctx.locale.getSnapshot())
   const t = useMemo(() => bindLocale(props.ctx.locale, NS), [props.ctx.locale])
-  const sidebarWide = useSyncExternalStore(props.sidebar.subscribe, props.sidebar.getSnapshot)
   // Subscribe for invalidation, then read the same authoritative public
   // snapshot used by the controller's routing decision. This avoids one-frame
   // disagreement when the first real turn flips hero -> active.
@@ -52,11 +54,71 @@ export function Morph(props: MorphProps) {
     fn => props.controller.subscribe(fn),
     () => props.controller.getState(),
   )
+  const composerDraft = props.useInput(input => input.draft)
+  const composer = composerSearchQuery(composerDraft)
   const [error, setError] = useState('')
-  const [view, setView] = useState<PreparedView>(() => buildView(state, props, t))
+  const view = useMemo(() => buildView(state, t, locale.active.startsWith('zh')), [locale, state, t])
+
+  // The public Composer draft is the only query source. Slash mode ends as
+  // soon as its claimed token disappears; direct-button mode accepts any
+  // ordinary draft without rewriting it.
   useEffect(() => {
-    setView(buildView(state, props, t))
-  }, [state, props, t, locale])
+    if (state.presentation !== 'morph' || state.sessionId !== props.sessionId) return
+    if (state.composerEntry === 'slash' && !composer.slashMode) {
+      props.controller.close()
+      return
+    }
+    if (state.draft !== composer.query) {
+      props.controller.setSelectedIndex(0)
+      props.controller.setDraft(composer.query)
+    }
+  }, [composer.query, composer.slashMode, props.controller, props.sessionId, state.composerEntry, state.draft, state.presentation, state.sessionId])
+
+  const closeMorph = () => {
+    // Breaking the token prefix is the public InputMachine signal that releases
+    // the claim. Direct-button entry leaves the ordinary draft byte-for-byte.
+    if (state.composerEntry === 'slash' && composer.slashMode) {
+      props.inputActions.setDraft(composer.query)
+    }
+    props.controller.close()
+  }
+  const runAt = async (index: number) => {
+    const item = view.items[Math.min(index, Math.max(0, view.items.length - 1))]?.item
+    if (!item) return
+    try {
+      if (state.composerEntry === 'slash' && composer.slashMode) {
+        props.inputActions.setDraft(composer.query)
+      }
+      await props.preferences.recordUse(item.id)
+      await item.primary.run(new AbortController().signal)
+      if (item.primary.stayOpen !== true) props.controller.close()
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+  }
+
+  // Composer keeps focus. Capture navigation for the result-only direct mode;
+  // slash Enter deliberately remains with DSH's public command claim.
+  useEffect(() => {
+    if (state.presentation !== 'morph' || state.sessionId !== props.sessionId || cold) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing || event.repeat) return
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        closeMorph()
+      } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        event.stopPropagation()
+        const step = event.key === 'ArrowDown' ? 1 : -1
+        props.controller.setSelectedIndex(Math.max(0, Math.min(view.items.length - 1, state.selectedIndex + step)))
+      } else if (event.key === 'Enter' && state.composerEntry === 'direct') {
+        event.preventDefault()
+        event.stopPropagation()
+        void runAt(state.selectedIndex)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true } as EventListenerOptions)
+  }, [cold, composer.query, composer.slashMode, props.controller, props.inputActions, props.preferences, props.sessionId, state.composerEntry, state.presentation, state.selectedIndex, state.sessionId, view.items])
 
   // If the controller presentation moved off Morph (or to a different
   // sessionId) we render nothing; the parent slot teardown handles the
@@ -64,75 +126,40 @@ export function Morph(props: MorphProps) {
   if (state.presentation !== 'morph') return null
   if (state.sessionId !== props.sessionId) return null
   if (cold) return null
-
-  const runPrimary = async () => {
-    const item = view.items[Math.min(state.selectedIndex, Math.max(0, view.items.length - 1))]?.item
-    if (!item) return
-    try {
-      await props.preferences.recordUse(item.id)
-      await item.primary.run(new AbortController().signal)
-      if (item.primary.stayOpen !== true) props.controller.close()
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
-  }
-  const runSecondary = async (item: PaletteItem, action: PaletteAction) => {
-    try {
-      await props.preferences.recordUse(item.id)
-      await action.run(new AbortController().signal)
-      if (action.stayOpen !== true) props.controller.close()
-      else props.controller.setActionPanelOpen(false)
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
-  }
   const displayError = error
     ? localizedError(error, { ctx: props.ctx, hasSession: true, workspaces: [], t })
     : (state.aggregator.failures.length ? t('providerFailed') : '')
   return <div data-session-id={props.sessionId}>
-    <UniversalPalette
-      t={t}
-      sidebarWide={sidebarWide}
-      cold={cold}
-      query={state.draft}
-      isLoading={view.pendingQuery || state.aggregator.status === 'loading'}
-      isEmpty={view.items.length === 0}
-      sections={view.sections}
-      emptyMessage={view.emptyMessage}
-      guidance={view.guidance}
-      contextHint={view.contextHint}
+    <MorphResults
+      label={t('results')}
+      loadingText={t('searching')}
+      emptyText={view.emptyMessage}
       error={displayError}
+      loading={view.pendingQuery || state.aggregator.status === 'loading'}
       items={view.items}
       selectedIndex={Math.min(state.selectedIndex, Math.max(0, view.items.length - 1))}
-      conflicts={[]}
-      actionPanelOpen={state.actionPanelOpen}
-      actionPanelSelectedIndex={state.actionPanelSelectedIndex}
-      onSelectedIndexChange={(i) => props.controller.setSelectedIndex(i)}
-      onQueryChange={(q) => props.controller.setDraft(q)}
-      onRunPrimary={() => { void runPrimary() }}
-      onRunSecondary={(item, action) => { void runSecondary(item, action) }}
-      onOpenActionPanel={() => props.controller.setActionPanelOpen(true)}
-      onCloseActionPanel={() => props.controller.setActionPanelOpen(false)}
-      onActionPanelIndexChange={(i) => props.controller.setActionPanelIndex(i)}
-      onClose={() => props.controller.close()}
-      rootDataAttributes={{ 'data-presentation': 'morph' }}
+      onSelectedIndexChange={index => props.controller.setSelectedIndex(index)}
+      onRun={index => { props.controller.setSelectedIndex(index); void runAt(index) }}
     />
   </div>
 }
 
 function buildView(
   state: ReturnType<SearchController['getState']>,
-  props: MorphProps,
   t: (key: string, params?: Record<string, unknown>) => string,
+  chinese: boolean,
 ) {
-  const workspaces = props.ctx.workspaces.list.getSnapshot().items.map((w) => ({
-    workspaceId: String(w.workspaceId),
-    title: w.title,
-    path: w.path,
-  }))
-  const view = prepareView(state, {
-    ctx: props.ctx,
-    hasSession: props.ctx.sessions.list.getSnapshot().current !== undefined,
-    workspaces,
-    t,
-  })
-  return view
+  const effective = state.draft.trim().replace(/^>\s*/, '')
+  const pendingQuery = state.aggregator.query !== effective
+  return {
+    items: pendingQuery ? [] : state.aggregator.items.map(row => ({
+      item: presentItem(row.item, t, chinese),
+      score: row.score,
+      matchRanges: row.match.ranges,
+    })),
+    pendingQuery,
+    emptyMessage: effective ? t('noResults', { query: state.draft }) : t('empty'),
+  }
 }
 
 function bindLocale(locale: LocaleRuntime, ns: string): (key: string, params?: Record<string, unknown>) => string {

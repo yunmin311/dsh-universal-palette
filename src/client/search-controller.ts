@@ -22,6 +22,7 @@ export type Presentation = null | 'floating' | 'morph'
 
 /** Local search mode (mirrors what the surface requests). */
 export type SurfaceMode = 'all' | 'workspaces' | 'sessions'
+export type ComposerEntry = 'direct' | 'slash'
 
 /** Listener fired on every committed state change. */
 export type SearchListener = (state: SearchState) => void
@@ -30,6 +31,7 @@ export type SearchListener = (state: SearchState) => void
 export interface SearchState {
   readonly presentation: Presentation
   readonly sessionId: string | null
+  readonly composerEntry: ComposerEntry | null
   readonly query: string
   readonly draft: string
   readonly mode: SurfaceMode
@@ -68,6 +70,7 @@ export class SearchController {
     this.state = {
       presentation: null,
       sessionId: null,
+      composerEntry: null,
       query: '',
       draft: '',
       mode: 'all',
@@ -79,11 +82,10 @@ export class SearchController {
       hasAggregator: true,
     }
     this.aggregatorUnsub = deps.aggregator.subscribe((next) => {
-      // Generation guard: only accept the aggregator update if it matches
-      // the generation the controller asked for. Surfaces that switch
-      // presentation bump the generation, so stale results can never
-      // overwrite a fresh surface's first paint.
-      if (next.seq < this.state.generation) return
+      // Aggregator seq and presentation generation are independent clocks.
+      // PaletteAggregator already aborts superseded queries before publish;
+      // comparing those clocks would discard valid results after surface
+      // open/close cycles.
       this.state = { ...this.state, aggregator: next }
       this.emit()
     })
@@ -109,6 +111,7 @@ export class SearchController {
       ...this.state,
       presentation: 'floating',
       sessionId: null,
+      composerEntry: null,
       draft: '',
       mode: 'all',
       selectedIndex: 0,
@@ -125,9 +128,9 @@ export class SearchController {
    * renders the hero variant without composer.dock; active Sessions use the
    * resident Composer overlay Morph.
    */
-  openComposerSearch(sessionId: string): void {
+  openComposerSearch(sessionId: string, entry: ComposerEntry = 'direct'): void {
     if (this.deps.cold()) this.openFloating()
-    else this.openMorph(sessionId)
+    else this.openMorph(sessionId, entry)
   }
 
   /**
@@ -136,11 +139,12 @@ export class SearchController {
    * generation, so the next render can rebind its session scope and the
    * aggregator's stale result cannot leak.
    */
-  openMorph(sessionId: string): void {
+  openMorph(sessionId: string, entry: ComposerEntry = 'direct'): void {
     const next: SearchState = {
       ...this.state,
       presentation: 'morph',
       sessionId,
+      composerEntry: entry,
       draft: '',
       mode: 'all',
       selectedIndex: 0,
@@ -158,6 +162,7 @@ export class SearchController {
       ...this.state,
       presentation: next,
       sessionId: next === 'floating' ? null : sessionId,
+      composerEntry: next === 'floating' ? null : this.state.composerEntry ?? 'direct',
       generation: this.state.generation + 1,
     }
     this.commit(state)
@@ -171,6 +176,7 @@ export class SearchController {
       ...this.state,
       presentation: null,
       sessionId: null,
+      composerEntry: null,
       generation: this.state.generation + 1,
     }
     this.commit(next)

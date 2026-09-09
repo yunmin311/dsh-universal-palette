@@ -41,6 +41,14 @@ test('openComposerSearch uses Morph for an active Session', () => {
   controller.openComposerSearch('s-active')
   assert.equal(controller.getState().presentation, 'morph')
   assert.equal(controller.getState().sessionId, 's-active')
+  assert.equal(controller.getState().composerEntry, 'direct')
+})
+
+test('slash entry is recorded without changing the active Morph route', () => {
+  const { controller } = mkController(false)
+  controller.openComposerSearch('s-active', 'slash')
+  assert.equal(controller.getState().presentation, 'morph')
+  assert.equal(controller.getState().composerEntry, 'slash')
 })
 
 test('openFloating sets presentation to floating', () => {
@@ -48,6 +56,7 @@ test('openFloating sets presentation to floating', () => {
   controller.openFloating()
   assert.equal(controller.getState().presentation, 'floating')
   assert.equal(controller.getState().sessionId, null)
+  assert.equal(controller.getState().composerEntry, null)
 })
 
 test('openMorph then openFloating returns to single surface', () => {
@@ -88,6 +97,17 @@ test('openFloating bumps generation; old aggregator result does not overwrite', 
   // becomes the new minimum. The aggregator stub is not invoked from
   // here, but the guard in the constructor already filters by seq < gen.
   assert.equal(aggregator.states.length, 0)
+})
+
+test('valid aggregator results survive repeated presentation generations', async () => {
+  const { controller } = mkController()
+  for (let index = 0; index < 4; index += 1) {
+    controller.openMorph('s1')
+    controller.close()
+  }
+  controller.setDraft('arch')
+  await new Promise(resolve => setTimeout(resolve, 60))
+  assert.equal(controller.getState().aggregator.query, 'arch')
 })
 
 test('setDraft + setSelectedIndex propagate through state', () => {
