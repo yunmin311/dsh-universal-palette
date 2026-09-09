@@ -11,13 +11,13 @@ Language: English | [简体中文](README.zh-CN.md)
 
 A command, session, model, and history surface for DeepSeek Harness Web — one keystroke, everything running in the current workspace.
 
-![Universal Palette open over DSH Web in dark theme](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/hero.png)
+![The full Global Floating Palette in an active DSH conversation](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/active-global-floating.png)
 
 ## Why Universal Palette
 
 DSH grows capabilities through plugins: each release and each community plugin can add Host commands, client command UIs, models, and reference sources. The native surfaces for these live in different places — the slash menu, the model selector, the sidebar, the composer's `@` menu — and none of them answer the one question a keyboard-first user actually has: *what can I do right now, in this workspace, and how do I get there?*
 
-Universal Palette is a single translucent overlay on `Ctrl+Shift+K` that federates those surfaces into one deterministic, relevance-ranked list. It owns no second catalog: every command, session, model, and history hit it shows comes from DSH's public Client APIs at query time, so the Palette is automatically correct as DSH and its ecosystem change.
+Universal Palette gives that shared search controller two presentations: contextual Composer Search and a global Floating Palette. It owns no second catalog: every command, session, model, and history hit it shows comes from DSH's public Client APIs at query time, so the Palette is automatically correct as DSH and its ecosystem change.
 
 It is built to stay out of the way: DSH's own design tokens, glass over the native surface, locale-following copy, and zero behavior change for anything it does not have a verified public contract with.
 
@@ -38,18 +38,44 @@ dsh plugin --profile web add @yunmin311/dsh-universal-palette@0.2.0
 dsh --profile web
 ```
 
-Press `Ctrl+Shift+K` (Windows/Linux) or `Cmd+Shift+K` (macOS) to toggle. `Esc` closes, outside clicks close and pass through to DSH.
+**Composer search**
+
+- Click the Search button or type `/find`.
+- In an active conversation, search opens as an upward Composer Morph.
+- In a zero-turn Hero session, the same entry uses the compact Floating Palette through Host capability fallback.
+
+**Global search**
+
+- Press `Alt+Q` on Windows/Linux or `Cmd+Shift+K` on macOS.
+- This opens the Floating Palette: zero-turn uses the compact variant, while active conversations use the full 600px variant.
+
+Existing custom shortcuts are preserved. `Esc` closes the Palette; outside clicks close a Floating Palette and pass through to DSH.
 
 ## Usage
 
 | Gesture | Result |
 |---|---|
-| `Ctrl/Cmd+Shift+K` | Toggle the Palette |
+| Search button or `/find` | Open Composer Search: upward Morph when active, compact Floating in a zero-turn Hero session |
+| `Alt+Q` (Windows/Linux) or `Cmd+Shift+K` (macOS) | Toggle the Global Floating Palette |
 | Type | Fuzzy search across commands, models, sessions, and history |
 | `↑↓` | Move selection |
 | `Enter` | Open / run the selected row |
 | `Tab` | Action panel (infrastructure; current built-in providers expose primary actions only) |
 | `Esc` | Close |
+
+## Two search modes
+
+### Composer Search — contextual / embedded
+
+In an active conversation, Composer Search opens as an upward Morph directly above the Composer. In a zero-turn Hero session, the same Search button or `/find` entry opens the compact Floating presentation through Host capability fallback.
+
+![Compact Floating presentation in a zero-turn Hero session](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/zero-turn-compact.png)
+
+![Upward Composer Morph in an active conversation](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/active-composer-morph.png)
+
+### Global Floating Palette — global / navigational
+
+The global shortcut always opens the Floating Palette. Zero-turn uses the compact 540px presentation; active conversations use the full 600px presentation shown at the top of this page.
 
 ![Searching the goal command](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/command-search.png)
 
@@ -93,6 +119,8 @@ Universal Palette currently has no Provider SDK, and none is planned. The prefer
 
 Verified and locked against `@deepseek-ai/dsh@0.1.2-rc.1` (`deepseek-ai/deepseek-harness@76fda729799fe9b3848dbe2c211d4b231032b81e`). Other DSH revisions are unverified. Details: [COMPATIBILITY.md](docs/COMPATIBILITY.md), [COMMAND_COMPATIBILITY.md](docs/COMMAND_COMPATIBILITY.md).
 
+On the locked DSH `0.1.2-rc.1` Hero surface, session-scoped Composer Morph outlets are not mounted. Universal Palette therefore uses its compact Floating presentation until the first conversation turn, then switches Composer Search to the native upward Morph. This is the approved **Host capability fallback**.
+
 ## Privacy & Security
 
 - No telemetry and no analytics.
@@ -111,7 +139,6 @@ Verified and locked against `@deepseek-ai/dsh@0.1.2-rc.1` (`deepseek-ai/deepseek
 
 - Locked to DSH `0.1.2-rc.1`; other revisions are unverified.
 - Client-only `commandUi` commands (e.g. popup pickers) are not discoverable — DSH exposes no public enumeration yet ([upstream gaps](docs/UPSTREAM_INTEROP_GAPS.md)).
-- dsh-keys-palette's default `Mod+Shift+K` (cycle theme) collides with the Palette's `Ctrl+Shift+K` on Windows; rebind either side.
 
 ## Development
 

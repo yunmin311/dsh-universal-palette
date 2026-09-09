@@ -11,13 +11,13 @@ English | [简体中文](README.zh-CN.md) · Language: 简体中文
 
 面向 DeepSeek Harness Web 的命令、会话、模型与历史统一面板：一次按键，当前工作区的一切触手可及。
 
-![深色主题下悬浮于 DSH Web 之上的 Universal Palette](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/hero.png)
+![活动会话中的完整全局悬浮面板](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/active-global-floating.png)
 
 ## 为什么需要 Universal Palette
 
 DSH 的能力通过插件不断增长：官方与社区插件持续添加 Host 命令、客户端命令 UI、模型与引用源。这些能力的原生入口散落在不同位置——斜杠菜单、模型选择器、侧栏、输入框 `@` 菜单——没有一个地方能回答键盘用户真正关心的问题：*当前工作区里我现在能用什么，怎么到达？*
 
-Universal Palette 是一个悬浮在 `Ctrl+Shift+K` 上的半透明面板，把这些入口联合成一个确定性的、按相关性排序的列表。它不维护第二套目录：每一条命令、会话、模型和历史命中都在查询时来自 DSH 的公开 Client API，因此 DSH 与社区生态变化时，Palette 无需任何修改即自动保持正确。
+Universal Palette 为同一个搜索控制器提供两种呈现：有上下文的 Composer Search，以及面向全局导航的悬浮面板。它不维护第二套目录：每一条命令、会话、模型和历史命中都在查询时来自 DSH 的公开 Client API，因此 DSH 与社区生态变化时，Palette 无需任何修改即自动保持正确。
 
 它刻意保持克制：DSH 官方设计令牌、原生界面之上的玻璃质感、跟随界面语言的文案，以及对一切没有经过验证公开 contract 的东西零行为影响。
 
@@ -38,18 +38,44 @@ dsh plugin --profile web add @yunmin311/dsh-universal-palette@0.2.0
 dsh --profile web
 ```
 
-`Ctrl+Shift+K`（Windows/Linux）或 `Cmd+Shift+K`（macOS）开关面板。`Esc` 关闭，点击外部关闭并穿透给 DSH。
+**Composer Search**
+
+- 点击 Search 按钮或输入 `/find`。
+- 活动会话中，搜索以向上的 Composer Morph 打开。
+- 零轮次 Hero 会话中，同一个入口通过宿主能力回退打开紧凑悬浮面板。
+
+**全局搜索**
+
+- Windows/Linux 按 `Alt+Q`，macOS 按 `Cmd+Shift+K`。
+- 打开悬浮面板：零轮次使用紧凑版，活动会话使用完整的 600px 版本。
+
+已有用户的自定义快捷键不会被覆盖。`Esc` 关闭面板；点击悬浮面板外部会关闭并把点击穿透给 DSH。
 
 ## 使用
 
 | 操作 | 效果 |
 |---|---|
-| `Ctrl/Cmd+Shift+K` | 开关面板 |
+| Search 按钮或 `/find` | 打开 Composer Search：活动会话为向上 Morph，零轮次 Hero 会话为紧凑悬浮面板 |
+| `Alt+Q`（Windows/Linux）或 `Cmd+Shift+K`（macOS） | 开关全局悬浮面板 |
 | 输入 | 模糊搜索命令、模型、会话与历史 |
 | `↑↓` | 移动选择 |
 | `Enter` | 打开 / 执行选中行 |
 | `Tab` | 操作面板（基础设施；当前内置 provider 仅提供主操作） |
 | `Esc` | 关闭 |
+
+## 两种搜索模式
+
+### Composer Search — 上下文 / 嵌入式
+
+活动会话中，Composer Search 以向上 Morph 直接出现在 Composer 上方。零轮次 Hero 会话中，同一个 Search 按钮或 `/find` 入口通过宿主能力回退打开紧凑悬浮呈现。
+
+![零轮次 Hero 会话中的紧凑悬浮呈现](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/zero-turn-compact.png)
+
+![活动会话中位于 Composer 上方的 Morph](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/active-composer-morph.png)
+
+### 全局悬浮面板 — 全局 / 导航式
+
+全局快捷键始终打开悬浮面板。零轮次使用紧凑的 540px 呈现；活动会话使用本页顶部所示的完整 600px 呈现。
 
 ![搜索 goal 命令](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/command-search.png)
 
@@ -93,6 +119,8 @@ Universal Palette 目前没有 Provider SDK，也没有相关计划。推荐的�
 
 验证并锁定于 `@deepseek-ai/dsh@0.1.2-rc.1`（`deepseek-ai/deepseek-harness@76fda729799fe9b3848dbe2c211d4b231032b81e`）。其他 DSH 版本未经验证。详见 [COMPATIBILITY.md](docs/COMPATIBILITY.md) 与 [COMMAND_COMPATIBILITY.md](docs/COMMAND_COMPATIBILITY.md)。
 
+在锁定的 DSH `0.1.2-rc.1` Hero 界面中，会话级 Composer Morph outlet 不会挂载。因此 Universal Palette 在第一轮对话前使用紧凑悬浮呈现，首轮之后再把 Composer Search 切换到原生向上 Morph。这是已批准的**宿主能力回退**。
+
 ## 隐私与安全
 
 - 无遥测、无统计埋点。
@@ -111,7 +139,6 @@ Universal Palette 目前没有 Provider SDK，也没有相关计划。推荐的�
 
 - 锁定 DSH `0.1.2-rc.1`；其他版本未验证。
 - Client-only `commandUi` 命令（如弹出式选择器）不可发现——DSH 尚无公开枚举接口（[upstream gaps](docs/UPSTREAM_INTEROP_GAPS.md)）。
-- dsh-keys-palette 默认 `Mod+Shift+K`（切换主题）在 Windows 上与面板 `Ctrl+Shift+K` 冲突；任一侧重绑即可。
 
 ## 开发
 
