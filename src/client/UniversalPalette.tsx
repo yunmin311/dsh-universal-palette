@@ -36,10 +36,22 @@ export function UniversalPalette(props: UniversalPaletteProps) {
   const surface = useRef<HTMLDivElement>(null)
   const search = useRef<HTMLInputElement>(null)
   const selectedRow = useRef<HTMLDivElement>(null)
+  const returnFocus = useRef<HTMLElement | null>(
+    typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null,
+  )
   const composing = useRef(false)
   const close = useRef(props.onClose)
   close.current = props.onClose
-  useLayoutEffect(() => { search.current?.focus({ preventScroll: true }) }, [])
+  useLayoutEffect(() => {
+    search.current?.focus({ preventScroll: true })
+    return () => {
+      if (returnFocus.current?.isConnected) {
+        returnFocus.current.focus({ preventScroll: true })
+      }
+    }
+  }, [])
   useEffect(() => {
     const outside = (event: PointerEvent) => {
       if (event.target instanceof Node && !surface.current?.contains(event.target)) close.current()

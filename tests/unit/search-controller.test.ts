@@ -19,15 +19,29 @@ class StubAggregator extends PaletteAggregator {
   publish(next: QueryState) { this.states.push(next) }
 }
 
-function mkController(): { controller: SearchController; aggregator: StubAggregator } {
+function mkController(cold = false): { controller: SearchController; aggregator: StubAggregator } {
   const aggregator = new StubAggregator()
   const controller = new SearchController({
     aggregator,
     preferences: () => ({ pins: {}, frecency: {}, glassIntensity: 'soft', shortcut: '' }),
-    cold: () => false,
+    cold: () => cold,
   })
   return { controller, aggregator }
 }
+
+test('openComposerSearch uses compact Floating for a cold Session', () => {
+  const { controller } = mkController(true)
+  controller.openComposerSearch('s-cold')
+  assert.equal(controller.getState().presentation, 'floating')
+  assert.equal(controller.getState().sessionId, null)
+})
+
+test('openComposerSearch uses Morph for an active Session', () => {
+  const { controller } = mkController(false)
+  controller.openComposerSearch('s-active')
+  assert.equal(controller.getState().presentation, 'morph')
+  assert.equal(controller.getState().sessionId, 's-active')
+})
 
 test('openFloating sets presentation to floating', () => {
   const { controller } = mkController()

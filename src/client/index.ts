@@ -68,16 +68,6 @@ export function sessionCold(ctx: Context): boolean {
   return verdictFromSessions(ctx.sessions as never)
 }
 
-interface MorphSlotProps {
-  readonly ctx: Context
-  readonly sessionId: string
-  readonly controller: SearchController
-  readonly sidebar: ReturnType<typeof createSidebarObservable>['observable']
-  readonly aggregator: PaletteAggregator
-  readonly preferences: PreferencesStore
-  readonly cold: ReturnType<typeof subscribeCold>
-}
-
 function detectBrowserPlatform(): NodeJS.Platform {
   const proc = (globalThis as { process?: { platform?: NodeJS.Platform } }).process
   if (proc && typeof proc.platform === 'string') return proc.platform
@@ -96,18 +86,6 @@ function migrateShortcut(stored: unknown): string {
     return defaultShortcut(detectBrowserPlatform())
   }
   return stored
-}
-
-function MorphSlot(props: MorphSlotProps) {
-  return createElement(Morph, {
-    ctx: props.ctx,
-    sessionId: props.sessionId,
-    sidebar: props.sidebar,
-    aggregator: props.aggregator,
-    preferences: props.preferences,
-    cold: props.cold,
-    controller: props.controller,
-  })
 }
 
 interface SearchButtonSlotProps {
@@ -145,11 +123,8 @@ function applyInternal(ctx: Context): void {
     context: () => ({}),
   })
 
-// Shared SearchController — single source of truth for presentation,
+  // Shared SearchController — single source of truth for presentation,
   // query, and result state. Floating and Morph both subscribe to it.
-  // The controller is created here so paletteControl.toggle (which the
-  // Keys Palette bridge invokes) and the Floating wrapper's keyboard
-  // listener share one instance.
   const controller = new SearchController({
     aggregator,
     preferences: () => preferences.snapshot,
@@ -171,6 +146,7 @@ function applyInternal(ctx: Context): void {
       subscribe: () => () => undefined,
     }
   }
+
   // Public sidebar footer owner prop supplies wide/compact only.
   const sidebarState = createSidebarObservable()
   const sidebar = sidebarState.observable
@@ -185,10 +161,7 @@ function applyInternal(ctx: Context): void {
   }, SidebarState))
 
   // Public Keys Palette bridge (unchanged): one bindable open action
-  // over `keys.actions`; capability-detected; lifecycle-safe. The toggle
-  // closes the surface when the Floating presentation is already open,
-  // otherwise it opens a fresh Floating surface — the same behavior the
-  // shared keyboard handler provides.
+  // over `keys.actions`; capability-detected; lifecycle-safe.
   const paletteControl = { toggle: () => {
     if (controller.getState().presentation === 'floating') controller.close()
     else controller.openFloating()
@@ -205,10 +178,8 @@ function applyInternal(ctx: Context): void {
   // time, so it works before the Floating surface body mounts. The
   // listener dispatches into the shared controller, so the Floating
   // wrapper and the Keys Palette bridge share the same presentation
-  // state. Migration rules live in `shortcut.ts` + `migrateShortcut`:
-  // existing storage values are preserved verbatim (Prompt §6); a
-  // fresh install that never wrote a preference falls back to the
-  // platform default.
+  // state. Migration rules live in `shortcut.ts`; storage value wins,
+  // empty storage falls back to platform default.
   const activeShortcut = preferences.hasSavedValue()
     ? migrateShortcut(preferences.snapshot.shortcut)
     : defaultShortcut(detectBrowserPlatform())
@@ -225,24 +196,10 @@ function applyInternal(ctx: Context): void {
   })
   ctx.effect(() => () => keyboard.dispose(), 'universal-palette: keyboard listener')
 
-  // Floating surface — registers through `shell.overlay`. The Floating
-  // wrapper receives the shared controller so its keyboard handler and
-  // paletteControl.toggle drive the same presentation state.
-  const FloatingEntry = () => createElement(Floating, {
-    ctx, sidebar, aggregator, preferences, cold, paletteControl, controller,
-  })
-  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-    name: 'shell.overlay',
-    id: 'dsh-universal-palette',
-  }, FloatingEntry))
-
   // Watch the preferences shortcut so a runtime change updates the
   // keyboard listener with the migrated value. The listener is the same
   // function identity across changes; we dispose and replace it.
   ctx.effect(() => preferences.subscribe(() => {
-    // Fresh installs never wrote a preference — the shortcut must follow
-    // the platform default, not the DEFAULT_PREFERENCES sentinel that
-    // PreferencesStore returns when the backend has no saved value.
     const nextActive = preferences.hasSavedValue()
       ? migrateShortcut(preferences.snapshot.shortcut)
       : defaultShortcut(detectBrowserPlatform())
@@ -262,18 +219,27 @@ function applyInternal(ctx: Context): void {
     ;(keyboard as { dispose: () => void }).dispose = replacement.dispose.bind(replacement)
   }), 'universal-palette: shortcut migration watcher')
 
-  // Conversation overlay slot — Composer Morph surface, strict per-
-  // Session scope, list-kind. The slot's per-session disposer is the
-  // Session lifecycle, so a Session switch or clear tears the entry
-  // down automatically.
+  // Floating surface — registers through `shell.overlay`. The Floating
+  // wrapper receives the shared controller so its keyboard handler and
+  // paletteControl.toggle drive the same presentation state.
+  const FloatingEntry = () => createElement(Floating, {
+    ctx, sidebar, aggregator, preferences, cold, paletteControl, controller,
+  })
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay',
+    id: 'dsh-universal-palette',
+  }, FloatingEntry))
+
+  // Active Morph — public overlay anchor inside the composer card. Its CSS
+  // follows DSH MenuView's bottom-anchored popup pattern to sit above the card.
+  // The component stays null for cold hero Sessions; their Search button and
+  // /find route through the shared controller to compact Floating instead.
   ctx.slots.inject('conversation.input.overlay', () => ctx.slots.register({
     name: 'conversation.input.overlay',
-    id: 'dsh-universal-palette-morph',
-  }, (props: { sessionId: string }) =>
-    createElement(MorphSlot, {
-      ctx, sessionId: props.sessionId, controller, sidebar, aggregator, preferences, cold,
-    })
-  ))
+    id: 'dsh-universal-palette-morph-active',
+  }, (props: { sessionId: string }) => createElement(Morph, {
+    ctx, sessionId: props.sessionId, controller, sidebar, aggregator, preferences, cold,
+  })))
 
   // Composer Search button — strict per-Session scope, list-kind. When
   // there is no current Session the slot itself does not exist (the
@@ -285,34 +251,29 @@ function applyInternal(ctx: Context): void {
   }, () => createElement(SearchButtonSlot, { ctx, controller })
   ))
 
-  // Public slash-pipeline source for `/find`. Registered against the
-  // locked InputTriggerService; aborts loudly if the Host command
-  // catalog already exposes an exact `find` command. Wait until a
-  // current Session exists before registering so the controller can
-  // warm the source into its per-session lexicon (InputTriggerService
-  // constructs controllers lazily at session-scope birth, so a source
-  // registered before any session exists is not prewarmed and only
-  // applies to the first controller born after registration).
-  let findSourceDisposer: (() => void) | null = null
-  const listSub = ctx.sessions?.list
-  if (listSub && typeof listSub.subscribe === 'function' && typeof listSub.getSnapshot === 'function') {
-    const stopFindWatch = listSub.subscribe(() => {
-      if (findSourceDisposer) return
-      if (listSub.getSnapshot().current === undefined) return
-      void registerFindSource({ ctx, controller }).then((disposer) => {
-        findSourceDisposer = () => { try { disposer() } catch { /* ignore */ } }
-      }).catch((error) => {
-        if (error instanceof PublicSlashFindCollision) {
-          // eslint-disable-next-line no-console
-          console.error('[dsh-universal-palette]', error.message)
-        } else {
-          // eslint-disable-next-line no-console
-          console.error('[dsh-universal-palette] /find source registration failed:', error)
-        }
-      })
+  // Public slash-pipeline source for `/find`. Registered once in apply
+  // lifecycle against the locked InputTriggerService; aborts loudly if
+  // the Host command catalog already exposes an exact `find` command.
+  // Upstream service.ts supports late registration: a source arriving
+  // after scope birth notifies existing controllers and joins lexicon.
+  // `registerFindSource` preserves `this` via `.call(triggers, ...)`.
+  ctx.effect(() => {
+    let cancelled = false
+    let disposer: (() => void) | null = null
+    registerFindSource({ ctx, controller }).then((d) => {
+      if (cancelled) { try { d() } catch { /* ignore */ } return }
+      disposer = d
+    }).catch((error) => {
+      if (error instanceof PublicSlashFindCollision) {
+        // eslint-disable-next-line no-console
+        console.error('[dsh-universal-palette]', error.message)
+      } else {
+        // eslint-disable-next-line no-console
+        console.error('[dsh-universal-palette] /find source registration failed:', error)
+      }
     })
-    ctx.effect(() => () => { stopFindWatch(); findSourceDisposer?.() }, 'universal-palette: /find source lifecycle')
-  }
+    return () => { cancelled = true; try { disposer?.() } catch { /* ignore */ } }
+  }, 'universal-palette: /find source lifecycle')
 }
 
 export default { inject, apply }

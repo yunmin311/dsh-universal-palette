@@ -1,15 +1,15 @@
 /**
- * Composer Morph wrapper.
+ * Composer Morph presentation.
  *
- * Registered through the public `conversation.input.overlay` slot —
- * strict per-Session, list-kind, scope 'session'. The Morph renders
- * only when:
- * - the shared SearchController commits `presentation === 'morph'`,
- * - the bound `sessionId` matches the slot's current Session, and
- * - the slot session itself is still resolvable (Session not cleared).
+ * Registered through `conversation.input.overlay` for an active conversation.
+ * The component renders only when the public SessionSnapshot.blank verdict is
+ * active=false; cold hero Sessions use the shared controller's Floating fallback.
  *
- * On Session switch / clear / scope dispose the slot teardown fires
- * automatically through `ctx.slots.register`'s disposer.
+ * Active positioning reuses DSH MenuView's public popup pattern
+ * (position: absolute; bottom: calc(100% + 4px)).
+ *
+ * The cold observable retains the last confirmed public verdict while a
+ * binding is transiently unavailable, so UNKNOWN never invents a phase.
  */
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
@@ -21,7 +21,7 @@ import type { SidebarObservable } from './sidebarState.ts'
 import { SearchController } from './search-controller.ts'
 import type { ColdObservable } from './cold.ts'
 import { UniversalPalette } from './UniversalPalette.tsx'
-import { prepareView, localizedError } from './paletteSurface.tsx'
+import { prepareView, localizedError, type PreparedView } from './paletteSurface.tsx'
 import type { PaletteAction, PaletteItem } from '../shared/contract.ts'
 
 export interface MorphProps {
@@ -36,21 +36,24 @@ export interface MorphProps {
 
 /**
  * One Morph instance per Session; its lifecycle is the slot lifecycle.
- * The wrapper binds to `sessionId` and re-reads it on every render so
- * a slot Session flip naturally re-mounts through React's key (the
- * parent calls `<Morph ... key={sessionId} />`).
+ * Renders whenever the shared controller commits presentation morph for
+ * the bound active session. Cold hero Sessions use Floating instead.
  */
 export function Morph(props: MorphProps) {
   const locale = useSyncExternalStore(fn => props.ctx.locale.subscribe(fn), () => props.ctx.locale.getSnapshot())
   const t = useMemo(() => bindLocale(props.ctx.locale, NS), [props.ctx.locale])
   const sidebarWide = useSyncExternalStore(props.sidebar.subscribe, props.sidebar.getSnapshot)
-  const cold = useSyncExternalStore(props.cold.subscribe, props.cold.getSnapshot)
+  // Subscribe for invalidation, then read the same authoritative public
+  // snapshot used by the controller's routing decision. This avoids one-frame
+  // disagreement when the first real turn flips hero -> active.
+  useSyncExternalStore(props.cold.subscribe, props.cold.getSnapshot)
+  const cold = props.controller.cold()
   const state = useSyncExternalStore(
     fn => props.controller.subscribe(fn),
     () => props.controller.getState(),
   )
   const [error, setError] = useState('')
-  const [view, setView] = useState(() => buildView(state, props, t))
+  const [view, setView] = useState<PreparedView>(() => buildView(state, props, t))
   useEffect(() => {
     setView(buildView(state, props, t))
   }, [state, props, t, locale])
@@ -60,6 +63,7 @@ export function Morph(props: MorphProps) {
   // remaining disposal when the Session itself goes away.
   if (state.presentation !== 'morph') return null
   if (state.sessionId !== props.sessionId) return null
+  if (cold) return null
 
   const runPrimary = async () => {
     const item = view.items[Math.min(state.selectedIndex, Math.max(0, view.items.length - 1))]?.item
@@ -81,7 +85,7 @@ export function Morph(props: MorphProps) {
   const displayError = error
     ? localizedError(error, { ctx: props.ctx, hasSession: true, workspaces: [], t })
     : (state.aggregator.failures.length ? t('providerFailed') : '')
-  return <div data-presentation="morph" data-session-id={props.sessionId}>
+  return <div data-session-id={props.sessionId}>
     <UniversalPalette
       t={t}
       sidebarWide={sidebarWide}

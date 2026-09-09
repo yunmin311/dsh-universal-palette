@@ -139,5 +139,5 @@ export function subscribeCold(ctx: Context): ColdObservable {
 export function readCold(ctx: Context): ColdState {
   const list = ctx.sessions?.list
   if (!list || typeof list.getSnapshot !== 'function') return true
-  return verdictFromSessions({ list, binding: ctx.sessions.binding })
+  return verdictFromSessions(ctx.sessions)
 }

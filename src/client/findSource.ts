@@ -7,10 +7,9 @@
  * - exposes exactly one candidate, `find`, on the `/` trigger;
  * - rejects any other slash text by reporting `undefined` so the
  *   pipeline keeps its normal flow;
- * - on `matchEnter` admits `/find` (exact) and returns
- *   `PickOutcome.claim('universal-palette.find')` so the Host handles
- *   the find verb — Universal Palette never types `/find` into the
- *   composer and never sends text to the Agent;
+ * - on `matchEnter` admits exact `/find` as a local public command claim;
+ *   its successful submit opens the palette and lets the Host clear the draft
+ *   without sending text to the Agent;
  * - is capability-detected: when the slash pipeline is absent the
  *   registration fails loudly at startup, so a host that does not
  *   support slash sources will not silently downgrade.
@@ -76,6 +75,7 @@ export async function findHostFindCollisions(ctx: Context): Promise<readonly str
  * otherwise returns `undefined` so the normal pipeline continues.
  */
 export function createFindSource(open: () => void): InputTriggerSource {
+  const openAfterHostSettles = () => { globalThis.setTimeout(open, 0) }
   return {
     trigger: FIND_TRIGGER,
     name: FIND_NAME,
@@ -90,14 +90,21 @@ export function createFindSource(open: () => void): InputTriggerSource {
       }]
     },
     onPick(): PickOutcome {
-      open()
-      return 'handled'
+      openAfterHostSettles()
+      return { text: '' }
     },
     async matchEnter(_session: ClientSessionContext, line: string, _signal: AbortSignal, _envelope: SubmitEnvelope): Promise<PickOutcome> {
       const trimmed = line.trim()
       if (trimmed !== '/find') return undefined
-      open()
-      return 'handled'
+      return {
+        claim: {
+          token: '/find',
+          async submit() {
+            openAfterHostSettles()
+            return { kind: 'success' }
+          },
+        },
+      }
     },
   }
 }
@@ -124,7 +131,7 @@ export async function registerFindSource(options: RegisterFindSourceOptions): Pr
   const open = () => {
     const id = options.ctx.sessions?.list?.getSnapshot?.()?.current
     if (id === undefined) return
-    options.controller.openMorph(String(id))
+    options.controller.openComposerSearch(String(id))
   }
   const triggers = (options.ctx as unknown as { inputTriggers?: { registerSource?: (src: InputTriggerSource) => () => void } }).inputTriggers
   const registerSource = triggers?.registerSource

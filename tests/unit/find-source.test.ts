@@ -2,8 +2,8 @@
  * /find Input Trigger source tests.
  *
  *  - candidate list contains exactly `find`;
- *  - picking the candidate opens Morph (controller.openMorph called);
- *  - exact Enter on `/find` opens Morph and returns handled;
+ *  - picking the candidate uses the shared Composer-search route;
+ *  - exact Enter on `/find` returns a local claim and uses the same route;
  *  - non-exact `/find something` is not intercepted;
  *  - Host command catalog collision is reported via PublicSlashFindCollision.
  */
@@ -13,33 +13,39 @@ import { createFindSource, findHostFindCollisions, PublicSlashFindCollision } fr
 
 function fakeController() {
   const calls: string[] = []
-  return { calls, openMorph: (id: string) => { calls.push(id) } }
+  return { calls, openComposerSearch: (id: string) => { calls.push(id) } }
 }
 
 test('candidate list exposes only the find candidate', async () => {
   const ctrl = fakeController()
-  const source = createFindSource(() => ctrl.openMorph('x'))
+  const source = createFindSource(() => ctrl.openComposerSearch('x'))
   const candidates = await source.candidates({ sessionId: 's1' } as never, { query: 'fi', position: 'leading', drilled: false, signal: new AbortController().signal })
   assert.equal(candidates.length, 1)
   assert.equal(candidates[0]?.name, 'find')
 })
 
-test('exact /find on Enter opens Morph and returns handled', async () => {
+test('exact /find on Enter returns a local claim that opens search and clears on success', async () => {
   const ctrl = fakeController()
-  const source = createFindSource(() => ctrl.openMorph('s1'))
+  const source = createFindSource(() => ctrl.openComposerSearch('s1'))
   const result = await source.matchEnter!(
     { sessionId: 's1' } as never,
     '/find',
     new AbortController().signal,
     { images: 0 },
   )
+  assert.equal(ctrl.calls.length, 0)
+  assert.ok(result && typeof result === 'object' && 'claim' in result)
+  assert.equal(result.claim.token, '/find')
+  const settlement = await result.claim.submit('', {} as never, [])
+  assert.deepEqual(settlement, { kind: 'success' })
+  assert.equal(ctrl.calls.length, 0, 'Host must settle and clear the draft before the palette takes focus')
+  await new Promise(resolve => setTimeout(resolve, 0))
   assert.equal(ctrl.calls[0], 's1')
-  assert.equal(result, 'handled')
 })
 
 test('non-exact /find text is not intercepted (handled === undefined / not claim)', async () => {
   const ctrl = fakeController()
-  const source = createFindSource(() => ctrl.openMorph('s1'))
+  const source = createFindSource(() => ctrl.openComposerSearch('s1'))
   const result = await source.matchEnter!(
     { sessionId: 's1' } as never,
     '/find assets',
@@ -50,9 +56,9 @@ test('non-exact /find text is not intercepted (handled === undefined / not claim
   assert.equal(result, undefined)
 })
 
-test('pick route also opens Morph', () => {
+test('pick route clears its span before opening the shared Composer-search route', async () => {
   const ctrl = fakeController()
-  const source = createFindSource(() => ctrl.openMorph('s2'))
+  const source = createFindSource(() => ctrl.openComposerSearch('s2'))
   const out = source.onPick({
     candidate: { name: 'find' },
     session: { sessionId: 's2' },
@@ -61,8 +67,10 @@ test('pick route also opens Morph', () => {
     action: 'pick',
     span: { start: 0, end: 5, draftRev: 0 },
   })
+  assert.deepEqual(out, { text: '' })
+  assert.equal(ctrl.calls.length, 0)
+  await new Promise(resolve => setTimeout(resolve, 0))
   assert.equal(ctrl.calls[0], 's2')
-  assert.equal(out, 'handled')
 })
 
 test('Host command catalog collision returns find name', async () => {

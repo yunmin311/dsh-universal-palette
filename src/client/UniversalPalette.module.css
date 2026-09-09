@@ -15,15 +15,23 @@
 /* Responsive visual estimate, not a reading of the private layout store.
  * Public sidebar footer owner prop supplies only wide/compact, not geometry. */
 .root[data-sidebar-wide='true'] { padding-inline-start: calc(16px + clamp(0px, 16vw, 280px)); }
-/* Cold state (no session, or session with no conversation turns yet):
- * the cold Floating stays upper-center like the active one (the composer
- * sits well below this band in the empty layout), but its visible result
- * area shortens to ~4-5 rows so the bottom never reaches the vertically
- * centered empty composer. Internal scroll handles longer result sets.
- * Signal source: official SessionSnapshot.blank; no DOM or private reads. */
-.root[data-cold='true'] { justify-content: center; padding-inline-start: calc(16px + clamp(0px, 4vw, 56px)); padding-inline-end: 16px; }
-.root[data-cold='true'] .surface { width: 540px; max-height: min(60vh, 320px); }
-.root[data-cold='true'] .list { max-height: min(40vh, 240px); }
+/* Cold Floating (no session, or session with no conversation turns yet):
+ * stays upper-center like the active one, but its visible result area
+ * shortens to ~4-5 rows. Signal source: official SessionSnapshot.blank;
+ * no DOM or private reads. */
+.root[data-presentation='floating'][data-cold='true'] { justify-content: center; padding-inline-start: calc(16px + clamp(0px, 4vw, 56px)); padding-inline-end: 16px; }
+.root[data-presentation='floating'][data-cold='true'] .surface { width: 540px; max-height: min(60vh, 320px); }
+.root[data-presentation='floating'][data-cold='true'] .list { max-height: min(40vh, 240px); }
+
+/* Active Morph: renders in conversation.input.overlay inside InputBar's
+ * overlayAnchor (position: absolute; inset: 0 0 auto; height: 0 at card
+ * top). Reuse DSH MenuView's public popup pattern
+ * (position: absolute; bottom: calc(100% + 4px); left: 0; right: 0) so
+ * the surface anchors above the Composer card. No hardcoded viewport
+ * geometry, no DOM reads. */
+.root[data-presentation='morph'][data-cold='false'] { position: absolute; bottom: calc(100% + 4px); left: 0; right: 0; top: auto; display: flex; justify-content: center; padding: 0; pointer-events: none; }
+.root[data-presentation='morph'][data-cold='false'] .surface { pointer-events: auto; width: 600px; max-width: 100%; max-height: min(70vh, 480px); }
+.root[data-presentation='morph'][data-cold='false'] .list { max-height: min(50vh, 360px); }
 .surface {
   pointer-events: auto;
   width: 600px;

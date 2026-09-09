@@ -51,4 +51,16 @@ test('client activation waits for shell.overlay and registers a two-argument lis
   assert.equal(overlayCalls[1]?.[0], 'register')
   assert.deepEqual(overlayCalls[1]?.[1], { name: 'shell.overlay', id: 'dsh-universal-palette' })
   assert.equal(typeof overlayCalls[1]?.[2], 'function')
+
+  const registeredSlots = calls
+    .filter(call => call[0] === 'register')
+    .map(call => (call[1] as { name?: string }).name)
+  assert.ok(
+    !registeredSlots.includes('conversation.composer.dock'),
+    'zero-turn host fallback must not leave a dead composer.dock entry',
+  )
+  assert.ok(
+    registeredSlots.includes('conversation.input.overlay'),
+    'active Morph must register in conversation.input.overlay',
+  )
 })

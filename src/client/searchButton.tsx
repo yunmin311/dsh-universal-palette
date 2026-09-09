@@ -3,7 +3,8 @@
  *
  * Registered into the public `conversation.input.left` slot — strict
  * per-Session, list-kind. The component is a button that opens the
- * Composer Morph surface through the shared SearchController. On
+ * best public Host surface through the shared SearchController. Cold
+ * hero Sessions fall back to compact Floating; active Sessions use Morph. On
  * Session switch the slot disposer automatically removes the entry.
  *
  * Zero access to package-private composer APIs.
@@ -39,7 +40,7 @@ export function SearchButton(props: SearchButtonProps) {
       onClick={() => {
         const id = props.ctx.sessions.list.getSnapshot().current
         if (id === undefined) return
-        props.controller.openMorph(String(id))
+        props.controller.openComposerSearch(String(id))
       }}
       style={{
         background: 'transparent',

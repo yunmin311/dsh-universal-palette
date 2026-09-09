@@ -16,11 +16,27 @@ const logPath = (() => {
 const captureScreenshots = !process.argv.includes('--no-screenshots')
 const output = 'evidence/2026-09-07-dual-surface'
 mkdirSync(output, { recursive: true })
+const viewportArg = (() => {
+  const idx = process.argv.indexOf('--viewport')
+  if (idx === -1) return '1792x896'
+  return process.argv[idx + 1]
+})()
+const [vpW, vpH] = viewportArg.split('x').map(Number)
+const argValue = (name, fallback) => {
+  const idx = process.argv.indexOf(name)
+  return idx === -1 ? fallback : process.argv[idx + 1]
+}
+const localeArg = argValue('--locale', 'en')
+const localeRuntimeId = localeArg === 'zh-CN' ? 'zh' : localeArg
+const themeArg = argValue('--theme', 'dark')
+const runKey = `${viewportArg.replace('x', '-')}-${themeArg}-${localeArg}`
 
 const results = {
   head: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
   dshHome: process.env.DSH_HOME ?? '(default)',
-  viewport: '1792x896',
+  viewport: viewportArg,
+  locale: localeArg,
+  theme: themeArg,
   checks: [],
   observations: {},
   screenshots: {},
@@ -36,7 +52,7 @@ const fail = (name, details) => {
 }
 
 const browser = await chromium.launch({ channel: 'msedge', headless: true })
-const context = await browser.newContext({ viewport: { width: 1792, height: 896 } })
+const context = await browser.newContext({ viewport: { width: vpW, height: vpH } })
 const dialog = page => page.getByRole('dialog', { name: /^(通用面板|Universal Palette)$/ })
 async function dismissOnboarding(page) {
   for (const name of ['继续', '稍后配置', 'Continue', 'Configure later']) {
@@ -83,7 +99,13 @@ await page.goto(url)
 await page.waitForFunction(() => window.__paletteTest, undefined, { timeout: 30_000 })
 await page.waitForTimeout(1000)
 await dismissOnboarding(page)
-await page.evaluate(() => window.__paletteTest.locale.setLocale('en'))
+await page.evaluate(({ locale, theme }) => {
+  const c = window.__paletteTest
+  c.locale.setLocale(locale)
+  c.get('theme')?.setTheme(theme)
+}, { locale: localeRuntimeId, theme: themeArg })
+await page.waitForTimeout(1000)
+await dismissOnboarding(page)
 
 // --- Phase A: profile composition ---
 const composition = await page.evaluate(() => {
@@ -101,247 +123,164 @@ if (!composition.hasSessions) fail('A1', 'no sessions service')
 if (!composition.hasInputTriggers) fail('A1', 'no inputTriggers service')
 if (!composition.hasSlots) fail('A1', 'no slots service')
 
-// --- Phase B: cold state (no session) — compact centered Floating ---
-await page.evaluate(() => window.__paletteTest.sessions.clear())
-await page.waitForTimeout(500)
-// Verify the locked platform default is Alt+Q (no Ctrl+Shift+K left over from
-// the legacy default), then dispatch the Alt+Q shortcut directly. Edge reserves
-// Alt as a menu accelerator on Windows, so a literal page.keyboard.press
-// never reaches attachKeyboard(); capture-phase dispatch at document is the
-// faithful equivalent of the host keydown.
-const shortcutStored = await page.evaluate(() => {
-  const raw = localStorage.getItem('dsh-universal-palette/preferences')
-  if (!raw) return null
-  return JSON.parse(raw).shortcut ?? ''
+const pressAltQ = () => page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', {
+  key: 'Q', code: 'KeyQ', altKey: true, bubbles: true, cancelable: true,
+})))
+const readSurface = () => dialog(page).evaluate((surface) => {
+  const root = surface.parentElement
+  const composer = document.querySelector('[role="textbox"]') || document.querySelector('textarea')
+  const surfaceRect = surface.getBoundingClientRect()
+  const composerRect = composer?.getBoundingClientRect()
+  return {
+    presentation: root?.getAttribute('data-presentation'),
+    cold: root?.getAttribute('data-cold'),
+    width: Math.round(surfaceRect.width),
+    surfaceTop: Math.round(surfaceRect.top),
+    surfaceBottom: Math.round(surfaceRect.bottom),
+    composerTop: composerRect ? Math.round(composerRect.top) : null,
+    composerBottom: composerRect ? Math.round(composerRect.bottom) : null,
+    dialogs: document.querySelectorAll('[data-plugin="dsh-universal-palette"][data-presentation] > [role="dialog"]').length,
+    morphs: document.querySelectorAll('[data-presentation="morph"]').length,
+    floating: document.querySelectorAll('[data-presentation="floating"]').length,
+    inViewport: surfaceRect.top >= 0 && surfaceRect.bottom <= window.innerHeight + 1,
+  }
 })
-check('B0 fresh install shortcut is the platform default (Alt+Q)', { shortcutStored })
-// Alt is reserved by Edge's menu bar; emulate the locked Alt+Q shortcut by
-// dispatching the keydown directly at document (capture-phase listeners see
-// it), so attachKeyboard() receives verbatim Alt+Q. A precheck confirms
-// the capture listener fires before we check the dialog.
-await page.evaluate(() => {
-  window.__keydownProbe = 0
-  window.addEventListener('keydown', (e) => { window.__keydownProbe += 1; window.__lastKeydown = { key: e.key, code: e.code, alt: e.altKey, ctrl: e.ctrlKey, shift: e.shiftKey, meta: e.metaKey, isComposing: e.isComposing, isTrusted: e.isTrusted, targetNodeName: e.target?.nodeName, targetIsBody: e.target === document.body } }, { capture: true })
-  document.dispatchEvent(new KeyboardEvent('keydown', {
-    key: 'Q', code: 'KeyQ', altKey: true, ctrlKey: false, shiftKey: false, metaKey: false,
-    bubbles: true, cancelable: true,
-  }))
-})
-await page.waitForTimeout(150)
-const keydownProbe = await page.evaluate(() => ({ probe: window.__keydownProbe, last: window.__lastKeydown }))
-check('B-precheck capture-phase listener received the dispatched Alt+Q', keydownProbe)
-
-// Probe whether the Universal Palette controller is exposed and whether
-// dispatchEvent triggers the registered handler. attachKeyboard writes
-// nothing to the window, so we only see the dialog after the surface
-// renders.
-await page.waitForTimeout(400)
-const snapshotState = await page.evaluate(() => {
-  const c = window.__paletteTest
-  const root = document.querySelector('[data-presentation="floating"]')
-  return { floatingRendered: Boolean(root) }
-})
-check('B-precheck2 Floating wrapper presence after Alt+Q', snapshotState)
-
-// The shell.overlay slot render may not have happened by the time the
-// very first dispatch fires (DSH registers the slot lazily on first
-// shell render). Trigger one focus / click to wake the overlay slot, then
-// retry Alt+Q to make the test robust to slot timing.
-await page.locator('body').click({ position: { x: 800, y: 50 } })
-await page.waitForTimeout(200)
-await page.evaluate(() => {
-  document.dispatchEvent(new KeyboardEvent('keydown', {
-    key: 'Q', code: 'KeyQ', altKey: true, ctrlKey: false, shiftKey: false, metaKey: false,
-    bubbles: true, cancelable: true,
-  }))
-})
-await page.waitForTimeout(400)
-const afterWake = await page.evaluate(() => ({
-  floatingRendered: Boolean(document.querySelector('[data-presentation="floating"]')),
-}))
-check('B-precheck3 Floating wrapper presence after Alt+Q with shell primed', afterWake)
-try {
+async function assertSurface(name, expected) {
   await expect(dialog(page)).toBeVisible({ timeout: 3000 })
-  const coldAttrs = await dialog(page).evaluate((el) => {
-    const root = el.parentElement
-    return {
-      cold: root.getAttribute('data-cold'),
-      presentation: root.getAttribute('data-presentation'),
-      justify: getComputedStyle(root).justifyContent,
-      width: Math.round(el.getBoundingClientRect().width),
-      viewportWidth: window.innerWidth,
-    }
-  })
-  check('B1 Alt+Q opens the Floating surface on Windows/Linux', coldAttrs)
-  if (coldAttrs.cold !== 'true') fail('B1', `data-cold expected 'true', got '${coldAttrs.cold}'`)
-  if (coldAttrs.justify !== 'center') fail('B1', `cold Floating should be centered, justify='${coldAttrs.justify}'`)
-  await shot(page, 'A-cold-centered-compact')
+  const actual = await readSurface()
+  check(name, actual)
+  if (actual.presentation !== expected.presentation) fail(name, `presentation=${actual.presentation}`)
+  if (actual.cold !== String(expected.cold)) fail(name, `cold=${actual.cold}`)
+  if (actual.width !== expected.width) fail(name, `width=${actual.width}`)
+  if (actual.dialogs !== 1) fail(name, `dialogs=${actual.dialogs}`)
+  if (expected.presentation === 'floating' && actual.morphs !== 0) fail(name, `morphs=${actual.morphs}`)
+  if (expected.presentation === 'morph' && !(actual.surfaceBottom <= (actual.composerTop ?? -Infinity))) {
+    fail(name, `Morph not fully above Composer: ${actual.surfaceBottom} > ${actual.composerTop}`)
+  }
+  if (!actual.inViewport) fail(name, 'surface outside viewport')
+  return actual
+}
+async function closeAndAssertFocus(name, composer) {
   await page.keyboard.press('Escape')
   await expect(dialog(page)).toHaveCount(0)
-  check('B2 Escape closes Floating')
-} catch (e) {
-  fail('B1', `Alt+Q did not open Floating: ${e.message}`)
+  const focusRestored = composer ? await composer.evaluate(el => document.activeElement === el) : true
+  check(name, { focusRestored })
+  if (!focusRestored) fail(name, 'focus was not restored')
+}
+async function openFind(composer, name) {
+  await composer.click()
+  await composer.fill('/f')
+  await page.waitForTimeout(500)
+  const discoverable = await page.getByText('Open the Universal Palette search', { exact: true }).count()
+  if (discoverable === 0) fail(name, '/find is not discoverable')
+  await composer.fill('/find')
+  await composer.press('Enter')
+  await page.waitForTimeout(500)
+  const composerTextAfter = await composer.evaluate(el => el.textContent ?? '')
+  check(`${name} dispatch`, { discoverable, composerTextAfter })
+  if (composerTextAfter !== '') fail(name, `Composer retained '${composerTextAfter}'`)
 }
 
-// --- Phase C: blank session — Search button + Morph open ---
+// --- B: no Session -> compact Floating only ---
+await page.evaluate(() => window.__paletteTest.sessions.clear())
+await page.waitForTimeout(500)
+const noSession = await page.evaluate(() => ({
+  searchButtons: document.querySelectorAll('[data-search-button="true"]').length,
+  morphs: document.querySelectorAll('[data-presentation="morph"]').length,
+}))
+check('B0 no-session has no Search button or Morph', noSession)
+if (noSession.searchButtons !== 0 || noSession.morphs !== 0) fail('B0', noSession)
+await page.locator('body').click({ position: { x: 20, y: 20 } })
+await pressAltQ()
+await page.waitForTimeout(400)
+await assertSurface('B1 no-session Alt+Q -> compact Floating', { presentation: 'floating', cold: true, width: 540 })
+await page.evaluate(() => { window.__pointerProbe = 0; document.body.addEventListener('pointerdown', () => { window.__pointerProbe += 1 }, { once: true }) })
+await page.mouse.click(20, 20)
+await expect(dialog(page)).toHaveCount(0)
+const pointerProbe = await page.evaluate(() => window.__pointerProbe)
+check('B2 Floating pointer-through reaches Host and closes', { pointerProbe })
+if (pointerProbe !== 1) fail('B2', `pointerProbe=${pointerProbe}`)
+
+// --- C: zero-turn hero -> every Composer entry falls back to compact Floating ---
 await page.evaluate(async () => {
   const c = window.__paletteTest
   let ws = c.workspaces.list.getSnapshot().items[0]
-  if (!ws) {
-    const created = await c.workspaces.create({ path: 'C:\\dsh-acceptance-20260907-workspace' })
-    ws = (created && created.workspaceId) ? created : c.workspaces.list.getSnapshot().items[0]
-    if (!ws) throw new Error('workspace creation failed: ' + JSON.stringify(created))
-  }
+  if (!ws) ws = await c.workspaces.create({ path: 'C:\\dsh-acceptance-20260907-workspace' })
   const id = await c.sessions.create({ workspaceId: ws.workspaceId })
   c.sessions.open(id)
   await c.sessions.refresh()
 })
-await page.waitForTimeout(900)
-
-const searchButtonCount = await page.locator('[data-search-button="true"]').count()
-check('C1 Composer Search button is registered on a blank Session', { count: searchButtonCount })
-if (searchButtonCount === 0) fail('C1', 'Search button missing from conversation.input.left slot')
-
-await page.locator('[data-search-button="true"]').first().click({ force: true })
-  await page.waitForTimeout(400)
-  try {
-    await expect(dialog(page)).toBeVisible({ timeout: 3000 })
-    const morphAttrs = await dialog(page).evaluate((el) => {
-      const root = el.parentElement
-      const surface = el
-      const composer = document.querySelector('[role="textbox"]') || document.querySelector('textarea')
-      const composerRect = composer?.getBoundingClientRect()
-      const morphRect = surface.getBoundingClientRect()
-      return {
-        presentation: root.getAttribute('data-presentation'),
-        sessionId: root.getAttribute('data-session-id'),
-        morphAboveComposer: composerRect ? morphRect.bottom <= composerRect.top + 4 : null,
-        morphY: Math.round(morphRect.y),
-        composerY: composerRect ? Math.round(composerRect.y) : null,
-      }
-    })
-    check('C2 Click on Search opens the Composer Morph surface (registered on conversation.input.overlay)', morphAttrs)
-    if (morphAttrs.presentation !== 'morph') fail('C2', `presentation expected 'morph', got '${morphAttrs.presentation}'`)
-    // KNOWN DEGRADATION: DSH 0.1.2-rc.1 renders conversation.input.overlay
-    // inside InputBar's flow (overlayAnchor container has position:absolute
-    // inset:0 0 auto but its children flow in InputBar's content order),
-    // so Morph currently sits just under the Composer in the empty-Session
-    // layout. We do NOT paper over this with hardcoded geometry (Prompt §2).
-    if (morphAttrs.morphAboveComposer !== true) {
-      results.observations.morphPositionKnownDegradation = {
-        morphY: morphAttrs.morphY,
-        composerY: morphAttrs.composerY,
-        note: 'conversation.input.overlay in DSH 0.1.2-rc.1 sits inside InputBar; Morph renders below Composer. No hardcoded geometry applied.',
-      }
-    }
-    await shot(page, 'B-empty-session-morph')
-  } catch (e) {
-    fail('C2', `Search button did not open Morph: ${e.message}`)
-  }
-
-// Floating and Morph are mutually exclusive — opening one closes the other.
-await page.evaluate(() => {
-  document.dispatchEvent(new KeyboardEvent('keydown', {
-    key: 'Q', code: 'KeyQ', altKey: true, ctrlKey: false, shiftKey: false, metaKey: false,
-    bubbles: true, cancelable: true,
-  }))
-})
-await page.waitForTimeout(400)
-const mutualExclusive = await page.evaluate(() => ({
-  dialogs: document.querySelectorAll('[role="dialog"]').length,
-}))
-check('C3 Floating and Morph are mutually exclusive', mutualExclusive)
-await page.keyboard.press('Escape')
-await page.waitForTimeout(300)
-
-// --- Phase D: active session — first turn flips blank -> active live ---
+await page.waitForTimeout(700)
 const composer = page.getByRole('textbox').last()
+const searchButton = page.locator('[data-search-button="true"]').first()
+if (await searchButton.count() !== 1) fail('C0', 'Search button missing')
+
+await composer.click()
+await searchButton.click({ force: true })
+await assertSurface('C1 zero-turn Search button -> compact Floating', { presentation: 'floating', cold: true, width: 540 })
+await closeAndAssertFocus('C1 Escape restores zero-turn Composer focus', composer)
+
+await openFind(composer, 'C2 zero-turn /find')
+await assertSurface('C2 zero-turn /find -> compact Floating', { presentation: 'floating', cold: true, width: 540 })
+await closeAndAssertFocus('C2 Escape restores zero-turn Composer focus', composer)
+
+await pressAltQ()
+await page.waitForTimeout(300)
+await assertSurface('C3 zero-turn Alt+Q -> compact Floating', { presentation: 'floating', cold: true, width: 540 })
+await closeAndAssertFocus('C3 zero-turn Alt+Q closes', null)
+
+// --- D: first real turn -> Search button and /find use upward Morph; Alt+Q stays full Floating ---
 await composer.click()
 await composer.fill('dual-surface acceptance: first real conversation turn.')
 await composer.press('Enter')
-await page.waitForTimeout(2200)
-
-const blankAfterTurn = await page.evaluate(() => {
+await page.waitForFunction(() => {
   const c = window.__paletteTest
   const id = c.sessions.list.getSnapshot().current
-  const b = id === undefined ? undefined : c.sessions.binding(id)
-  return b && b.session ? b.session.getSnapshot().blank : true
-})
-check('D1 First turn flips Session blank=false in real time', { blankAfterTurn })
+  return id !== undefined && c.sessions.binding(id)?.session?.getSnapshot?.().blank === false
+}, undefined, { timeout: 10_000 })
 
-// --- Phase E: active session — open Morph again, run a query, verify results ---
-await page.evaluate(() => window.__paletteTest.sessions.refresh())
-await page.waitForTimeout(400)
-await page.locator('[data-search-button="true"]').first().click({ force: true })
-await page.waitForTimeout(400)
-try {
-  await expect(dialog(page)).toBeVisible({ timeout: 3000 })
-  await page.getByRole('combobox').fill('plan')
-  await page.waitForTimeout(900)
-  const rows = await page.locator('#up-results [role="option"]').count()
-  check('E1 Query inside Morph returns ranked rows', { rows })
-  await shot(page, 'C-active-session-query')
-  await page.keyboard.press('Escape')
-  await expect(dialog(page)).toHaveCount(0)
-  check('E2 Escape closes Morph and restores focus', { focusedTag: await page.evaluate(() => document.activeElement?.tagName ?? null) })
-} catch (e) {
-  fail('E1', `Morph query path failed: ${e.message}`)
-}
+await searchButton.click({ force: true })
+await page.waitForTimeout(300)
+await assertSurface('D1 active Search button -> upward Morph', { presentation: 'morph', cold: false, width: 600 })
+await closeAndAssertFocus('D1 Escape restores active Composer focus', composer)
 
-// --- Phase F: /find opens the same Morph without sending text to the Agent ---
-// Make sure no Floating surface is still up from previous phases.
-if (await dialog(page).count() > 0) {
-  await page.keyboard.press('Escape')
-  await page.waitForTimeout(200)
+await openFind(composer, 'D2 active /find')
+await assertSurface('D2 active /find -> upward Morph', { presentation: 'morph', cold: false, width: 600 })
+await pressAltQ()
+await page.waitForTimeout(300)
+await assertSurface('D3 Alt+Q atomically replaces Morph with full Floating', { presentation: 'floating', cold: false, width: 600 })
+await closeAndAssertFocus('D3 active Floating closes', null)
+
+// --- E: long conversation keeps the same active routing ---
+for (let i = 0; i < 6; i++) {
+  await composer.click()
+  await composer.fill(`Growth note ${i + 1}: transcript keeps growing while placement stays stable.`)
+  await composer.press('Enter')
+  await page.waitForTimeout(500)
 }
-// Probe the Host command catalog for `find` so the script can prove the
-// public Host arbitration did not collide, independently of the
-// InputTriggerService registration outcome.
-const hostFind = await page.evaluate(async () => {
-  const c = window.__paletteTest
-  const current = c.sessions.list.getSnapshot().current
-  if (current === undefined) return { probe: 'no current session' }
-  const r = await c.remote.commands.list(current)
-  return { ok: r.ok, items: r.value?.items?.map((i) => i.name) ?? [] }
+await page.evaluate(() => {
+  const scroller = [...document.querySelectorAll('*')].find(el => el.scrollHeight > el.clientHeight + 100 && el.clientHeight > 200)
+  if (scroller) scroller.scrollTop = scroller.scrollHeight
 })
-check('F0 Host command catalog does NOT register `find` (no Host collision)', hostFind)
-if ((hostFind.items ?? []).includes('find')) fail('F0', 'Host collision: `find` exists in Host catalog; Universal Palette must not register /find.')
-const composerForFind = page.getByRole('textbox').last()
-await composerForFind.click()
-await composerForFind.fill('/find')
-await page.waitForTimeout(800)
-await composerForFind.press('Enter')
-await page.waitForTimeout(700)
-try {
-  await expect(dialog(page)).toBeVisible({ timeout: 3000 })
-  const composerTextAfter = await composerForFind.inputValue().catch(() => '')
-  const morphAttr = await page.locator('[data-presentation="morph"]').count()
-  check('F1 /find Enter opens the Morph without typing into Composer', {
-    morphInstances: morphAttr,
-    composerTextAfter,
-  })
-  if (composerTextAfter === '/find') fail('F1', 'Composer draft still contains /find after dispatch')
-  if (morphAttr === 0) fail('F1', 'Morph did not open after /find')
-  await shot(page, 'D-find-source')
-  await page.keyboard.press('Escape')
-  await expect(dialog(page)).toHaveCount(0)
-} catch (e) {
-  // KNOWN DEGRADATION (DSH 0.1.2-rc.1): InputTriggerService.registerSource
-  // throws `Cannot destructure property 'live' of 'this' as it is undefined.`
-  // for sources registered on a session that already exists. The source
-  // contract itself is correct (see tests/unit/find-source.test.ts) and the
-  // Host collision probe above proves we did not silently shadow a Host
-  // command. We do NOT mark this as a Universal Palette regression.
-  results.observations.findSourceKnownDegradation = {
-    note: 'DSH 0.1.2-rc.1 InputTriggerService.registerSource throws when a source is registered after a session has been opened. Our source contract is verified by unit tests; Host-catalog collision probe passes (no Host /find).',
-  }
-  check('F1-known-degradation: DSH 0.1.2-rc.1 InputTriggerService.registerSource bug — Universal Palette source is correct, only DSH seam is broken', { error: String(e).split('\n')[0] })
-  if (await dialog(page).count() > 0) await page.keyboard.press('Escape')
-}
+
+await searchButton.click({ force: true })
+await page.waitForTimeout(300)
+await assertSurface('E1 long Search button -> upward Morph', { presentation: 'morph', cold: false, width: 600 })
+await closeAndAssertFocus('E1 Escape restores long Composer focus', composer)
+
+await openFind(composer, 'E2 long /find')
+await assertSurface('E2 long /find -> upward Morph', { presentation: 'morph', cold: false, width: 600 })
+await closeAndAssertFocus('E2 Escape restores long Composer focus', composer)
+
+await pressAltQ()
+await page.waitForTimeout(300)
+await assertSurface('E3 long Alt+Q -> full Floating', { presentation: 'floating', cold: false, width: 600 })
+await closeAndAssertFocus('E3 long Floating closes', null)
 
 // --- Final: no page errors ---
 if (results.errors.length === 0) check('Z1 no browser page errors', [])
 else fail('Z1', results.errors)
 
-writeFileSync(`${output}/dual-surface-results.json`, JSON.stringify(results, null, 2) + '\n')
+writeFileSync(`${output}/dual-surface-results-${runKey}.json`, JSON.stringify(results, null, 2) + '\n')
 await browser.close()
+if (results.checks.some(entry => entry.status === 'FAIL')) process.exitCode = 1

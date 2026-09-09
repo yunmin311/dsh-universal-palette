@@ -120,6 +120,17 @@ export class SearchController {
   }
 
   /**
+   * Open the Composer-owned search entry through the best public Host
+   * capability. Zero-turn Sessions use compact Floating because locked DSH
+   * renders the hero variant without composer.dock; active Sessions use the
+   * resident Composer overlay Morph.
+   */
+  openComposerSearch(sessionId: string): void {
+    if (this.deps.cold()) this.openFloating()
+    else this.openMorph(sessionId)
+  }
+
+  /**
    * Open the Morph surface scoped to `sessionId`. Atomic: closes any open
    * Floating. Surfaces that re-open with a different `sessionId` bump the
    * generation, so the next render can rebind its session scope and the

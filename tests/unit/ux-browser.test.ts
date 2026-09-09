@@ -41,7 +41,7 @@ test('React browser: stable input/caret, Escape stack, toggle, outside click pas
       function App() {
         const [open, setOpen] = React.useState(false), [panel, setPanel] = React.useState(false), [query, setQuery] = React.useState(''), [selected, setSelected] = React.useState(0);
         const live = React.useRef({open, panel}); live.current = {open, panel};
-        const close = () => { setOpen(false); setPanel(false); original.focus(); };
+        const close = () => { setOpen(false); setPanel(false); };
         React.useEffect(() => keyboard.exports.attachKeyboard({shortcut:'Ctrl+Shift+K', isOpen:()=>live.current.open,
           onOpen:()=>setOpen(true), onClose:close, onEscape:()=>live.current.panel ? setPanel(false) : close()}).dispose, []);
         window.probe = {open, panel, get clicks() { return clicks }};

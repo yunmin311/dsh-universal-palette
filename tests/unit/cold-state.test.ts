@@ -9,7 +9,7 @@ const realRequire = createRequire(source)
 const module = { exports: {} as typeof import('../../src/cold.ts') }
 const code = ts.transpileModule(readFileSync(source, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
 new Function('require', 'module', 'exports', code)(realRequire, module, module.exports)
-const { verdictFromSnapshot, verdictFromBinding, verdictFromSessions, subscribeCold } = module.exports
+const { readCold, verdictFromSnapshot, verdictFromBinding, verdictFromSessions, subscribeCold } = module.exports
 
 const ctxWith = (
   current: string | undefined,
@@ -70,6 +70,20 @@ test('verdictFromSnapshot is pure and ignores non-blank snapshots', () => {
 
 test('verdictFromBinding returns active on missing binding', () => {
   assert.equal(verdictFromBinding(undefined), false)
+})
+
+test('readCold preserves the sessions binding receiver', () => {
+  const sessions = {
+    marker: 'sessions-service',
+    list: { getSnapshot: () => ({ current: 's1' }) },
+    binding(this: { marker: string }, id: string) {
+      assert.equal(this.marker, 'sessions-service')
+      assert.equal(id, 's1')
+      return { session: { getSnapshot: () => ({ blank: true }) } }
+    },
+  }
+
+  assert.equal(readCold({ sessions } as never), true)
 })
 
 test('subscribeCold starts cold when current snapshot is blank', () => {
