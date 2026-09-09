@@ -40,9 +40,10 @@ dsh --profile web
 
 **Composer Search**
 
-- 点击 Search 按钮或输入 `/find`。
-- 活动会话中，搜索以向上的 Composer Morph 打开。
-- 零轮次 Hero 会话中，同一个入口通过宿主能力回退打开紧凑悬浮面板。
+- 从 DSH 原生 slash 菜单输入 `/find`，或点击 Search 按钮。裸 `/` 仍完全由 DSH 接管。
+- Composer 始终是唯一查询输入框。`/find query` 保留在 Composer 中；Search 按钮则直接从当前 draft 打开同一个搜索，不插入 `/find`。
+- 活动会话中，结果以紧凑的 DSH 原生样式呈现在 Composer 上方。
+- 零轮次 Hero 会话中，由于锁定宿主尚未挂载活动 Composer overlay surface，Composer Search 通过宿主能力回退使用 Compact Floating。
 
 **全局搜索**
 
@@ -55,7 +56,8 @@ dsh --profile web
 
 | 操作 | 效果 |
 |---|---|
-| Search 按钮或 `/find` | 打开 Composer Search：活动会话为向上 Morph，零轮次 Hero 会话为紧凑悬浮面板 |
+| `/` | 使用 DSH 原生 slash 菜单 |
+| Search 按钮或 `/find` | 从 Composer 打开 Composer Search：活动会话在上方显示紧凑的 DSH 原生结果，零轮次 Hero 会话使用 Compact Floating |
 | `Alt+Q`（Windows/Linux）或 `Cmd+Shift+K`（macOS） | 开关全局悬浮面板 |
 | 输入 | 模糊搜索命令、模型、会话与历史 |
 | `↑↓` | 移动选择 |
@@ -67,7 +69,7 @@ dsh --profile web
 
 ### Composer Search — 上下文 / 嵌入式
 
-活动会话中，Composer Search 以向上 Morph 直接出现在 Composer 上方。零轮次 Hero 会话中，同一个 Search 按钮或 `/find` 入口通过宿主能力回退打开紧凑悬浮呈现。
+活动会话中，Composer 始终是唯一查询输入框，搜索结果以紧凑的 DSH 原生样式直接出现在其上方。零轮次 Hero 会话中，同一个 Search 按钮或 `/find` 入口通过宿主能力回退打开 Compact Floating。
 
 ![零轮次 Hero 会话中的紧凑悬浮呈现](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/zero-turn-compact.png)
 
