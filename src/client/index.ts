@@ -38,6 +38,15 @@ import { Floating } from './floating.tsx'
 import { Morph } from './morph.tsx'
 import { SearchButton, SEARCH_BUTTON_ID } from './searchButton.tsx'
 import { registerFindSource, PublicSlashFindCollision } from './findSource.ts'
+import { createHeroSeatPresence } from './morphSeatPresence.ts'
+
+// Experimental contract supplied by the pinned local DSH reference host.
+// Keep this augmentation local until the public package catalog includes it.
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotMap {
+    'conversation.hero.composer.dock': { kind: 'list'; scope: 'session' }
+  }
+}
 
 export const inject = [
   'remote',
@@ -131,6 +140,7 @@ function applyInternal(ctx: Context): void {
     preferences: () => preferences.snapshot,
     cold: () => readCold(ctx),
   })
+  const heroSeat = createHeroSeatPresence()
   // Live cold verdict observable. The Float/Morph wrappers subscribe to
   // it so a real-time `blank` flip mid-open updates the layout height
   // without restarting the surface. Defensive: a missing list/binding
@@ -231,16 +241,23 @@ function applyInternal(ctx: Context): void {
     id: 'dsh-universal-palette',
   }, FloatingEntry))
 
-  // Active Morph — public overlay anchor inside the composer card. Its CSS
-  // follows DSH MenuView's bottom-anchored popup pattern to sit above the card.
-  // The component stays null for cold hero Sessions; their Search button and
-  // /find route through the shared controller to compact Floating instead.
+  // Composer Morph placement is owned entirely by the Host mount location.
+  // DSH renders input.overlay in Hero too, so the actual Hero dock lifecycle
+  // suppresses that shared overlay without consulting Session phase state.
+  ctx.slots.inject('conversation.hero.composer.dock', () => ctx.slots.register({
+    name: 'conversation.hero.composer.dock',
+    id: 'dsh-universal-palette-morph-hero',
+  }, (props: { sessionId: string; useInput: <T>(selector: (state: InputState) => T) => T; inputActions: InputActions }) => createElement(Morph, {
+    ctx, sessionId: props.sessionId, controller, sidebar, aggregator, preferences, heroSeat,
+    placement: 'hero-down', useInput: props.useInput, inputActions: props.inputActions,
+  })))
+
   ctx.slots.inject('conversation.input.overlay', () => ctx.slots.register({
     name: 'conversation.input.overlay',
     id: 'dsh-universal-palette-morph-active',
   }, (props: { sessionId: string; useInput: <T>(selector: (state: InputState) => T) => T; inputActions: InputActions }) => createElement(Morph, {
-    ctx, sessionId: props.sessionId, controller, sidebar, aggregator, preferences, cold,
-    useInput: props.useInput, inputActions: props.inputActions,
+    ctx, sessionId: props.sessionId, controller, sidebar, aggregator, preferences, heroSeat,
+    placement: 'active-up', useInput: props.useInput, inputActions: props.inputActions,
   })))
 
   // Composer Search button — strict per-Session scope, list-kind. When

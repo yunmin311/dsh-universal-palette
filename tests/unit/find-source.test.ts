@@ -101,18 +101,18 @@ test('bare slash and unrelated commands are never claimed by Universal Palette',
   assert.equal(await source.matchEnter!({ sessionId: 's1' } as never, '/goal', new AbortController().signal, { images: 0 }), undefined)
 })
 
-test('cold hero fallback consumes /find without leaving an unreachable command claim', async () => {
+test('Hero /find enters the same persistent claim as active Composer search', async () => {
   const ctrl = fakeController()
   const source = createFindSource(
     () => ctrl.openComposerSearch('cold'),
     async () => false,
-    () => false,
   )
   const out = source.onPick({
     candidate: { name: 'find' }, session: { sessionId: 'cold' }, position: 'leading',
     via: 'menu', action: 'pick', span: { start: 0, end: 5, draftRev: 0 },
   })
-  assert.deepEqual(out, { text: '' })
+  assert.ok(out && typeof out === 'object' && 'claim' in out)
+  assert.equal(out.claim.token, '/find ')
   await new Promise(resolve => setTimeout(resolve, 0))
   assert.deepEqual(ctrl.calls, ['cold'])
 })

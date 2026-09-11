@@ -13,10 +13,12 @@ import { PaletteAggregator, type QueryState } from '../../src/client/aggregator.
 
 class StubAggregator extends PaletteAggregator {
   public states: QueryState[] = []
+  public queries: string[] = []
   constructor() {
     super({ providers: [], preferences: () => ({ pins: {}, frecency: {}, glassIntensity: 'soft', shortcut: '' }) })
   }
   publish(next: QueryState) { this.states.push(next) }
+  override setQuery(query: string) { this.queries.push(query); super.setQuery(query) }
 }
 
 function mkController(cold = false): { controller: SearchController; aggregator: StubAggregator } {
@@ -29,11 +31,21 @@ function mkController(cold = false): { controller: SearchController; aggregator:
   return { controller, aggregator }
 }
 
-test('openComposerSearch uses compact Floating for a cold Session', () => {
-  const { controller } = mkController(true)
+test('openComposerSearch uses Morph for a Hero Session', () => {
+  const { controller, aggregator } = mkController(true)
   controller.openComposerSearch('s-cold')
-  assert.equal(controller.getState().presentation, 'floating')
-  assert.equal(controller.getState().sessionId, null)
+  assert.equal(controller.getState().presentation, 'morph')
+  assert.equal(controller.getState().sessionId, 's-cold')
+  assert.equal(controller.getState().composerEntry, 'direct')
+  assert.deepEqual(aggregator.queries, [''])
+})
+
+test('reopening Morph with an unchanged empty query retriggers the initial search', () => {
+  const { controller, aggregator } = mkController(true)
+  controller.openMorph('s-cold')
+  controller.close()
+  controller.openMorph('s-cold')
+  assert.deepEqual(aggregator.queries, ['', ''])
 })
 
 test('openComposerSearch uses Morph for an active Session', () => {

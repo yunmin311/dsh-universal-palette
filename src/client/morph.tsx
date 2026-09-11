@@ -1,17 +1,13 @@
 /**
  * Composer Morph presentation.
  *
- * Registered through `conversation.input.overlay` for an active conversation.
- * The component renders only when the public SessionSnapshot.blank verdict is
- * active=false; cold hero Sessions use the shared controller's Floating fallback.
+ * Registered through the host's mutually exclusive Composer seats. The seat
+ * itself supplies placement: Hero dock points down; active overlay points up.
  *
  * Active positioning reuses DSH MenuView's public popup pattern
  * (position: absolute; bottom: calc(100% + 4px)).
- *
- * The cold observable retains the last confirmed public verdict while a
- * binding is transiently unavailable, so UNKNOWN never invents a phase.
  */
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { InputActions, InputState } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -20,10 +16,10 @@ import type { PaletteAggregator } from './aggregator.ts'
 import type { PreferencesStore } from './state/preferences.ts'
 import type { SidebarObservable } from './sidebarState.ts'
 import { SearchController } from './search-controller.ts'
-import type { ColdObservable } from './cold.ts'
-import { MorphResults } from './MorphResults.tsx'
+import { MorphResults, type MorphPlacement } from './MorphResults.tsx'
 import { composerSearchQuery } from './morphPresentation.ts'
 import { localizedError } from './paletteSurface.tsx'
+import type { HeroSeatPresence } from './morphSeatPresence.ts'
 
 export interface MorphProps {
   readonly ctx: Context
@@ -31,7 +27,8 @@ export interface MorphProps {
   readonly sidebar: SidebarObservable
   readonly aggregator: PaletteAggregator
   readonly preferences: PreferencesStore
-  readonly cold: ColdObservable
+  readonly placement: MorphPlacement
+  readonly heroSeat: HeroSeatPresence
   readonly controller: SearchController
   readonly useInput: <T>(selector: (state: InputState) => T) => T
   readonly inputActions: InputActions
@@ -40,16 +37,16 @@ export interface MorphProps {
 /**
  * One Morph instance per Session; its lifecycle is the slot lifecycle.
  * Renders whenever the shared controller commits presentation morph for
- * the bound active session. Cold hero Sessions use Floating instead.
+ * the bound Session. Placement is owned by the Host slot that mounted it.
  */
 export function Morph(props: MorphProps) {
   const locale = useSyncExternalStore(fn => props.ctx.locale.subscribe(fn), () => props.ctx.locale.getSnapshot())
   const t = useMemo(() => bindLocale(props.ctx.locale, NS), [props.ctx.locale])
-  // Subscribe for invalidation, then read the same authoritative public
-  // snapshot used by the controller's routing decision. This avoids one-frame
-  // disagreement when the first real turn flips hero -> active.
-  useSyncExternalStore(props.cold.subscribe, props.cold.getSnapshot)
-  const cold = props.controller.cold()
+  useLayoutEffect(
+    () => props.placement === 'hero-down' ? props.heroSeat.mount() : undefined,
+    [props.heroSeat, props.placement],
+  )
+  const heroSeatMounted = useSyncExternalStore(props.heroSeat.subscribe, props.heroSeat.getSnapshot)
   const state = useSyncExternalStore(
     fn => props.controller.subscribe(fn),
     () => props.controller.getState(),
@@ -98,7 +95,7 @@ export function Morph(props: MorphProps) {
   // Composer keeps focus. Capture navigation for the result-only direct mode;
   // slash Enter deliberately remains with DSH's public command claim.
   useEffect(() => {
-    if (state.presentation !== 'morph' || state.sessionId !== props.sessionId || cold) return
+    if (state.presentation !== 'morph' || state.sessionId !== props.sessionId) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.isComposing || event.repeat) return
       if (event.key === 'Escape') {
@@ -118,30 +115,30 @@ export function Morph(props: MorphProps) {
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true } as EventListenerOptions)
-  }, [cold, composer.query, composer.slashMode, props.controller, props.inputActions, props.preferences, props.sessionId, state.composerEntry, state.presentation, state.selectedIndex, state.sessionId, view.items])
+  }, [composer.query, composer.slashMode, props.controller, props.inputActions, props.preferences, props.sessionId, state.composerEntry, state.presentation, state.selectedIndex, state.sessionId, view.items])
 
   // If the controller presentation moved off Morph (or to a different
   // sessionId) we render nothing; the parent slot teardown handles the
   // remaining disposal when the Session itself goes away.
   if (state.presentation !== 'morph') return null
   if (state.sessionId !== props.sessionId) return null
-  if (cold) return null
+  if (props.placement === 'active-up' && heroSeatMounted) return null
   const displayError = error
     ? localizedError(error, { ctx: props.ctx, hasSession: true, workspaces: [], t })
     : (state.aggregator.failures.length ? t('providerFailed') : '')
-  return <div data-session-id={props.sessionId}>
-    <MorphResults
-      label={t('results')}
-      loadingText={t('searching')}
-      emptyText={view.emptyMessage}
-      error={displayError}
-      loading={view.pendingQuery || state.aggregator.status === 'loading'}
-      items={view.items}
-      selectedIndex={Math.min(state.selectedIndex, Math.max(0, view.items.length - 1))}
-      onSelectedIndexChange={index => props.controller.setSelectedIndex(index)}
-      onRun={index => { props.controller.setSelectedIndex(index); void runAt(index) }}
-    />
-  </div>
+  return <MorphResults
+    placement={props.placement}
+    sessionId={props.sessionId}
+    label={t('results')}
+    loadingText={t('searching')}
+    emptyText={view.emptyMessage}
+    error={displayError}
+    loading={view.pendingQuery || state.aggregator.status === 'loading'}
+    items={view.items}
+    selectedIndex={Math.min(state.selectedIndex, Math.max(0, view.items.length - 1))}
+    onSelectedIndexChange={index => props.controller.setSelectedIndex(index)}
+    onRun={index => { props.controller.setSelectedIndex(index); void runAt(index) }}
+  />
 }
 
 function buildView(

@@ -77,15 +77,10 @@ export async function findHostFindCollisions(ctx: Context): Promise<readonly str
 export function createFindSource(
   open: () => void,
   executeSelected: (query: string) => Promise<boolean> = async () => false,
-  canClaim: () => boolean = () => true,
 ): InputTriggerSource {
   const openAfterHostSettles = () => { globalThis.setTimeout(open, 0) }
   const enterSearchMode = (): PickOutcome => {
     openAfterHostSettles()
-    // Locked DSH's hero variant cannot mount the Composer Morph. Preserve the
-    // approved compact-Floating fallback and avoid leaving a hidden claim in
-    // the hero Composer after the Floating surface closes.
-    if (!canClaim()) return { text: '' }
     return {
       claim: {
         // Trailing space is intentional: Space selection is consumed by the
@@ -176,7 +171,7 @@ export async function registerFindSource(options: RegisterFindSourceOptions): Pr
   }
   // Preserve `this` binding: registerSource uses `this.live` internally.
   return options.ctx.effect(
-    () => registerSource.call(triggers, createFindSource(open, executeSelected, () => !options.controller.cold())),
+    () => registerSource.call(triggers, createFindSource(open, executeSelected)),
     'universal-palette: /find input trigger source',
   )
 }

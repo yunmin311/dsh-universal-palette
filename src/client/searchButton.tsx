@@ -3,8 +3,8 @@
  *
  * Registered into the public `conversation.input.left` slot — strict
  * per-Session, list-kind. The component is a button that opens the
- * best public Host surface through the shared SearchController. Cold
- * hero Sessions fall back to compact Floating; active Sessions use Morph. On
+ * Composer Morph through the shared SearchController. The Host-selected slot
+ * controls whether results render below Hero or above active Composer. On
  * Session switch the slot disposer automatically removes the entry.
  *
  * Zero access to package-private composer APIs.

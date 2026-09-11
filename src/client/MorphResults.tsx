@@ -11,7 +11,11 @@ import type { PaletteItem } from '../shared/contract.ts'
 import { conciseMorphDescription, morphTypeLabel } from './morphPresentation.ts'
 import css, { cssText } from './MorphResults.module.css'
 
+export type MorphPlacement = 'hero-down' | 'active-up'
+
 export interface MorphResultsProps {
+  readonly placement: MorphPlacement
+  readonly sessionId: string
   readonly label: string
   readonly loadingText: string
   readonly emptyText: string
@@ -27,7 +31,7 @@ export interface MorphResultsProps {
 export function MorphResults(props: MorphResultsProps) {
   const selected = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => { selected.current?.scrollIntoView({ block: 'nearest' }) }, [props.selectedIndex])
-  return <div className={css.root} data-plugin="dsh-universal-palette" data-presentation="morph">
+  return <div className={css.root} data-plugin="dsh-universal-palette" data-presentation="morph" data-placement={props.placement} data-session-id={props.sessionId}>
     <style data-plugin="dsh-universal-palette-morph">{cssText}</style>
     <div className={css.surface}>
       <div className={css.list} role="listbox" aria-label={props.label}>

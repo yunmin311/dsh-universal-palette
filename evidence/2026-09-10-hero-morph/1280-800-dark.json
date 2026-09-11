@@ -1,0 +1,184 @@
+{
+  "hostCommit": "64c3528282c09412ea6fec57b968c6109d492715",
+  "viewport": "1280x800",
+  "theme": "dark",
+  "checks": [
+    {
+      "name": "A no-session boundary",
+      "status": "PASS",
+      "detail": "no Hero dock; Alt+Q opens Global Floating"
+    },
+    {
+      "name": "B Hero direct Search",
+      "status": "PASS",
+      "detail": {
+        "rows": 40,
+        "placement": "hero-down",
+        "position": "static",
+        "rootTop": 385,
+        "surfaceTop": 385,
+        "surfaceBottom": 593,
+        "surfaceWidth": 712,
+        "surfaceHeight": 208,
+        "cardTop": 267,
+        "cardBottom": 381,
+        "cardWidth": 712,
+        "listClientHeight": 200,
+        "listScrollHeight": 1600,
+        "ancestors": [
+          {
+            "tag": "DIV",
+            "className": "",
+            "width": 0,
+            "display": "contents",
+            "position": "static",
+            "alignSelf": "auto",
+            "flex": "0 1 auto"
+          },
+          {
+            "tag": "DIV",
+            "className": "tDvOMW_root tDvOMW_hero",
+            "width": 744,
+            "display": "flex",
+            "position": "static",
+            "alignSelf": "auto",
+            "flex": "0 1 auto"
+          },
+          {
+            "tag": "DIV",
+            "className": "",
+            "width": 0,
+            "display": "contents",
+            "position": "static",
+            "alignSelf": "auto",
+            "flex": "0 1 auto"
+          },
+          {
+            "tag": "DIV",
+            "className": "f4rb5W_composerStack f4rb5W_composerHero",
+            "width": 744,
+            "display": "flex",
+            "position": "static",
+            "alignSelf": "center",
+            "flex": "0 1 auto"
+          },
+          {
+            "tag": "DIV",
+            "className": "",
+            "width": 0,
+            "display": "contents",
+            "position": "static",
+            "alignSelf": "auto",
+            "flex": "0 1 auto"
+          }
+        ]
+      }
+    },
+    {
+      "name": "C Hero /find and bare slash",
+      "status": "PASS",
+      "detail": "native slash retained; claim query synced; Esc restored dsh"
+    },
+    {
+      "name": "D active direct Search unchanged",
+      "status": "PASS",
+      "detail": {
+        "activeSessionId": "session-d8cd84a9-bfd1-4a07-a594-5ac3ecefb21a",
+        "placement": "active-up",
+        "position": "absolute",
+        "rootTop": 348,
+        "surfaceTop": 348,
+        "surfaceBottom": 668,
+        "surfaceWidth": 712,
+        "surfaceHeight": 320,
+        "cardTop": 672,
+        "cardBottom": 770,
+        "cardWidth": 712,
+        "listClientHeight": 312,
+        "listScrollHeight": 1600,
+        "rows": 40,
+        "ancestors": [
+          {
+            "tag": "DIV",
+            "className": "",
+            "width": 0,
+            "display": "contents",
+            "position": "static",
+            "alignSelf": "auto",
+            "flex": "0 1 auto"
+          },
+          {
+            "tag": "DIV",
+            "className": "tDvOMW_overlayAnchor",
+            "width": 712,
+            "display": "block",
+            "position": "absolute",
+            "alignSelf": "auto",
+            "flex": "0 1 auto"
+          },
+          {
+            "tag": "DIV",
+            "className": "tDvOMW_card",
+            "width": 712,
+            "display": "flex",
+            "position": "relative",
+            "alignSelf": "auto",
+            "flex": "0 1 auto"
+          },
+          {
+            "tag": "DIV",
+            "className": "tDvOMW_root",
+            "width": 990,
+            "display": "flex",
+            "position": "static",
+            "alignSelf": "auto",
+            "flex": "0 1 auto"
+          },
+          {
+            "tag": "DIV",
+            "className": "",
+            "width": 0,
+            "display": "contents",
+            "position": "static",
+            "alignSelf": "auto",
+            "flex": "0 1 auto"
+          }
+        ]
+      }
+    },
+    {
+      "name": "E active /find claimed Enter",
+      "status": "PASS",
+      "detail": "executed \"//goalSet or view the goal for a long-running taskCOMMAND\"; Composer cleared of claim; no Agent submission"
+    },
+    {
+      "name": "Alt+Q remains Global Floating",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "no pageerror",
+      "status": "PASS",
+      "detail": ""
+    }
+  ],
+  "states": {
+    "A-no-session-global-floating": {
+      "screenshot": "evidence/2026-09-10-hero-morph/1280-800-dark-A-no-session-global-floating.png"
+    },
+    "B-hero-direct-down": {
+      "screenshot": "evidence/2026-09-10-hero-morph/1280-800-dark-B-hero-direct-down.png"
+    },
+    "C-hero-find-down": {
+      "screenshot": "evidence/2026-09-10-hero-morph/1280-800-dark-C-hero-find-down.png"
+    },
+    "D-active-direct-up": {
+      "screenshot": "evidence/2026-09-10-hero-morph/1280-800-dark-D-active-direct-up.png"
+    },
+    "E-active-find-up": {
+      "screenshot": "evidence/2026-09-10-hero-morph/1280-800-dark-E-active-find-up.png"
+    }
+  },
+  "errors": [],
+  "sacrificialCurrent": "session-7a60e3e1-9413-4ad3-b958-169467deb421"
+}

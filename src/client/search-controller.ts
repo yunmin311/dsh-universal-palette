@@ -120,17 +120,12 @@ export class SearchController {
       generation: this.state.generation + 1,
     }
     this.commit(next)
+    this.deps.aggregator.setQuery(next.draft)
   }
 
-  /**
-   * Open the Composer-owned search entry through the best public Host
-   * capability. Zero-turn Sessions use compact Floating because locked DSH
-   * renders the hero variant without composer.dock; active Sessions use the
-   * resident Composer overlay Morph.
-   */
+  /** Open Composer-owned Search in the slot-mounted Morph presentation. */
   openComposerSearch(sessionId: string, entry: ComposerEntry = 'direct'): void {
-    if (this.deps.cold()) this.openFloating()
-    else this.openMorph(sessionId, entry)
+    this.openMorph(sessionId, entry)
   }
 
   /**
@@ -138,6 +133,10 @@ export class SearchController {
    * Floating. Surfaces that re-open with a different `sessionId` bump the
    * generation, so the next render can rebind its session scope and the
    * aggregator's stale result cannot leak.
+   *
+   * Opening itself is a search trigger: the aggregator is always re-queried
+   * with the reset draft, even when the query value did not change (notably
+   * the empty-query first open, where no draft diff would otherwise fire).
    */
   openMorph(sessionId: string, entry: ComposerEntry = 'direct'): void {
     const next: SearchState = {
@@ -153,6 +152,7 @@ export class SearchController {
       generation: this.state.generation + 1,
     }
     this.commit(next)
+    this.deps.aggregator.setQuery(next.draft)
   }
 
   /** Switch the open presentation without resetting draft/query/etc. */

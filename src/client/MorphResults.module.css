@@ -27,6 +27,26 @@
   scrollbar-width: thin;
   scrollbar-color: var(--dsw-alias-scrollbar-bg-l2) transparent;
 }
+.root[data-placement='hero-down'] {
+  position: static;
+  width: 100%;
+  max-width: var(--dsh-composer-card-max-width);
+  box-sizing: border-box;
+  margin-top: 4px;
+}
+.root[data-placement='hero-down'] .surface {
+  max-height: 208px;
+  /* Adjacent (top) side tucks toward the Composer so the dock reads as an
+   * extension of the card; far (bottom) side keeps the 20px menu radius. */
+  border-radius: 12px 12px 20px 20px;
+}
+.root[data-placement='hero-down'] .list {
+  max-height: 200px;
+}
+/* Mirror for the upward overlay: the Composer-adjacent bottom side tucks. */
+.root[data-placement='active-up'] .surface {
+  border-radius: 20px 20px 12px 12px;
+}
 .list::-webkit-scrollbar { width: 6px; }
 .list::-webkit-scrollbar-track { background: transparent; }
 .list::-webkit-scrollbar-thumb {

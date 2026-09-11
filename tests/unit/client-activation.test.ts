@@ -56,11 +56,15 @@ test('client activation waits for shell.overlay and registers a two-argument lis
     .filter(call => call[0] === 'register')
     .map(call => (call[1] as { name?: string }).name)
   assert.ok(
-    !registeredSlots.includes('conversation.composer.dock'),
-    'zero-turn host fallback must not leave a dead composer.dock entry',
+    registeredSlots.includes('conversation.hero.composer.dock'),
+    'zero-turn Morph must register in the public Hero composer dock',
   )
   assert.ok(
     registeredSlots.includes('conversation.input.overlay'),
     'active Morph must register in conversation.input.overlay',
+  )
+  assert.ok(
+    !registeredSlots.includes('conversation.composer.dock'),
+    'the existing active composer dock contract must remain untouched',
   )
 })
