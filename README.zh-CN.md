@@ -43,7 +43,8 @@ dsh --profile web
 - 从 DSH 原生 slash 菜单输入 `/find`，或点击 Search 按钮。裸 `/` 仍完全由 DSH 接管。
 - Composer 始终是唯一查询输入框。`/find query` 保留在 Composer 中；Search 按钮则直接从当前 draft 打开同一个搜索，不插入 `/find`。
 - 活动会话中，结果以紧凑的 DSH 原生样式呈现在 Composer 上方。
-- 零轮次 Hero 会话中，由于锁定宿主尚未挂载活动 Composer overlay surface，Composer Search 通过宿主能力回退使用 Compact Floating。
+- 零轮次 Hero 会话中，结果以同样的 DSH 原生样式直接呈现在 Composer 下方：常规文档流，约 5 行可见加内部滚动，绝不遮挡 Composer。
+- Hero 与活动会话两种呈现共享同一个控制器、同一组 provider、同一套排序与结果执行。
 
 **全局搜索**
 
@@ -57,7 +58,7 @@ dsh --profile web
 | 操作 | 效果 |
 |---|---|
 | `/` | 使用 DSH 原生 slash 菜单 |
-| Search 按钮或 `/find` | 从 Composer 打开 Composer Search：活动会话在上方显示紧凑的 DSH 原生结果，零轮次 Hero 会话使用 Compact Floating |
+| Search 按钮或 `/find` | 从 Composer 打开 Composer Search：零轮次 Hero 会话向下展开 Morph，活动会话向上展开 Morph |
 | `Alt+Q`（Windows/Linux）或 `Cmd+Shift+K`（macOS） | 开关全局悬浮面板 |
 | 输入 | 模糊搜索命令、模型、会话与历史 |
 | `↑↓` | 移动选择 |
@@ -69,11 +70,11 @@ dsh --profile web
 
 ### Composer Search — 上下文 / 嵌入式
 
-活动会话中，Composer 始终是唯一查询输入框，搜索结果以紧凑的 DSH 原生样式直接出现在其上方。零轮次 Hero 会话中，同一个 Search 按钮或 `/find` 入口通过宿主能力回退打开 Compact Floating。
+活动会话中，Composer 始终是唯一查询输入框，搜索结果以紧凑的 DSH 原生样式直接出现在其上方。零轮次 Hero 会话中，同一个 Search 按钮或 `/find` 入口以常规文档流在 Composer 下方打开同一个结果面。
 
-![零轮次 Hero 会话中的紧凑悬浮呈现](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/zero-turn-compact.png)
+![零轮次 Hero 会话中向下展开的 Composer Search](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/hero-composer-down.png)
 
-![活动会话中位于 Composer 上方的 Morph](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/active-composer-morph.png)
+![活动会话中向上展开的 Composer Search](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/active-composer-morph.png)
 
 ### 全局悬浮面板 — 全局 / 导航式
 
@@ -121,7 +122,7 @@ Universal Palette 目前没有 Provider SDK，也没有相关计划。推荐的�
 
 验证并锁定于 `@deepseek-ai/dsh@0.1.2-rc.1`（`deepseek-ai/deepseek-harness@76fda729799fe9b3848dbe2c211d4b231032b81e`）。其他 DSH 版本未经验证。详见 [COMPATIBILITY.md](docs/COMPATIBILITY.md) 与 [COMMAND_COMPATIBILITY.md](docs/COMMAND_COMPATIBILITY.md)。
 
-在锁定的 DSH `0.1.2-rc.1` Hero 界面中，会话级 Composer Morph outlet 不会挂载。因此 Universal Palette 在第一轮对话前使用紧凑悬浮呈现，首轮之后再把 Composer Search 切换到原生向上 Morph。这是已批准的**宿主能力回退**。
+在锁定的 DSH `0.1.2-rc.1` Hero 界面中，会话级 Composer Morph outlet 不会挂载。Hero 向下呈现目前仅对本开发构建所用的本地实验 Hero dock 契约验证通过；官方 `0.1.2-rc.1` 并不暴露该席位。
 
 ## 隐私与安全
 

@@ -43,7 +43,8 @@ dsh --profile web
 - Type `/find` from the native DSH slash menu, or use the Search button. Bare `/` remains owned by DSH.
 - The Composer remains the only query input. `/find query` stays in the Composer, while the Search button opens the same search directly from the current draft without inserting `/find`.
 - In an active conversation, results appear as a compact DSH-native surface above the Composer.
-- In a zero-turn Hero session, Composer Search falls back to Compact Floating because the locked Host does not mount the active Composer overlay surface yet.
+- In a zero-turn Hero session, results appear in the same DSH-native surface directly below the Composer: normal document flow, about five visible rows with internal scrolling, never covering the Composer.
+- Hero and active presentations share the same controller, providers, ranking, and result execution.
 
 **Global search**
 
@@ -57,7 +58,7 @@ Existing custom shortcuts are preserved. `Esc` closes the Palette; outside click
 | Gesture | Result |
 |---|---|
 | `/` | Use the native DSH slash menu |
-| Search button or `/find` | Open Composer Search from the Composer: compact DSH-native results above it when active, Compact Floating in a zero-turn Hero session |
+| Search button or `/find` | Open Composer Search from the Composer — downward Morph in a zero-turn Hero session, upward Morph when active |
 | `Alt+Q` (Windows/Linux) or `Cmd+Shift+K` (macOS) | Toggle the Global Floating Palette |
 | Type | Fuzzy search across commands, models, sessions, and history |
 | `↑↓` | Move selection |
@@ -69,11 +70,11 @@ Existing custom shortcuts are preserved. `Esc` closes the Palette; outside click
 
 ### Composer Search — contextual / embedded
 
-In an active conversation, the Composer stays the only query input and results appear in a compact DSH-native surface directly above it. In a zero-turn Hero session, the same Search button or `/find` entry opens the Compact Floating presentation through Host capability fallback.
+In an active conversation, the Composer stays the only query input and results appear in a compact DSH-native surface directly above it. In a zero-turn Hero session, the same Search button or `/find` entry opens the same surface directly below the Composer in normal document flow.
 
-![Compact Floating presentation in a zero-turn Hero session](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/zero-turn-compact.png)
+![Downward Composer Search in a zero-turn Hero session](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/hero-composer-down.png)
 
-![Upward Composer Morph in an active conversation](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/active-composer-morph.png)
+![Upward Composer Search in an active conversation](https://raw.githubusercontent.com/yunmin311/dsh-universal-palette/main/docs/assets/readme/active-composer-morph.png)
 
 ### Global Floating Palette — global / navigational
 
@@ -121,7 +122,7 @@ Universal Palette currently has no Provider SDK, and none is planned. The prefer
 
 Verified and locked against `@deepseek-ai/dsh@0.1.2-rc.1` (`deepseek-ai/deepseek-harness@76fda729799fe9b3848dbe2c211d4b231032b81e`). Other DSH revisions are unverified. Details: [COMPATIBILITY.md](docs/COMPATIBILITY.md), [COMMAND_COMPATIBILITY.md](docs/COMMAND_COMPATIBILITY.md).
 
-On the locked DSH `0.1.2-rc.1` Hero surface, session-scoped Composer Morph outlets are not mounted. Universal Palette therefore uses its compact Floating presentation until the first conversation turn, then switches Composer Search to the native upward Morph. This is the approved **Host capability fallback**.
+On the locked DSH `0.1.2-rc.1` Hero surface, session-scoped Composer Morph outlets are not mounted. The Hero downward presentation is currently validated against the local experimental Hero dock contract used by this development build; stock `0.1.2-rc.1` does not expose that seat.
 
 ## Privacy & Security
 
