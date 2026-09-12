@@ -62,3 +62,12 @@ The browser does not call the Host-only `sessionQuery` service directly. `ctx.se
 - Conversation Hits are enabled for this plugin's Web profile rather than accepting the upstream default `openAt: never`.
 - The Palette intentionally excludes subagent command/session/model surfaces.
 - Image-bearing command execution is not exposed by this V1 UI; command execution passes the public empty image array.
+
+## Hero composer dock (experimental seat)
+
+| Host | `conversation.hero.composer.dock` | Hero Composer Search | Active Composer Search | Global Floating |
+|---|---|---|---|---|
+| Stock `@deepseek-ai/dsh@0.1.2-rc.1` | not declared | fail closed: Search button disabled, no `/find` candidate, hand-typed `/find …` is claimed and answers a localized capability error (never the Agent, never an upward Morph) | works (upward Morph) | works |
+| Maintainer fork `yunmin311/deepseek-harness` `feat/hero-composer-dock` (upstream master + one additive slot commit) | declared | works: downward Morph, normal document flow below the Composer | works (upward Morph) | works |
+
+The seat is declared through the public children table of `conversation.composer.bar` and consumed through the public slot ledger (`ctx.slots.spec` / `ctx.slots.subscribe` for capability, `ctx.slots.inject` for the mount lifecycle). No private registry, DOM measurement, or patched-host assumption is used at runtime: on hosts without the seat the plugin degrades by design (fail closed), verified by real boots on both hosts (2026-09-12, 1792×896, isolated `DSH_HOME`s).

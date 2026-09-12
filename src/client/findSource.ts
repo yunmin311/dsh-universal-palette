@@ -70,13 +70,31 @@ export async function findHostFindCollisions(ctx: Context): Promise<readonly str
 }
 
 /**
+ * Compatibility capability injected by the plugin composition. The claim is
+ * ALWAYS offered for a typed `/find …` (gating the claim would fall through
+ * to the Agent submission pipeline); only the surface availability and the
+ * candidate listing are gated.
+ */
+export interface FindCapability {
+  /** Whether the Composer Search surface may open right now (`!cold || hero dock declared`). */
+  readonly composerSearchAllowed: () => boolean
+  /** Localized capability error returned by the claim when the surface cannot open. */
+  readonly unavailableError: () => string
+}
+
+/**
  * Build the `/find` Input Trigger source. The source returns the
  * single candidate `find`, accepts exact `/find` Enter arbitration, and
  * otherwise returns `undefined` so the normal pipeline continues.
+ *
+ * With a capability, the candidate is withheld (`[]`) on a Hero surface
+ * whose host lacks the dock, and the claim's submit answers with the
+ * localized capability error instead of touching the Agent pipeline.
  */
 export function createFindSource(
   open: () => void,
   executeSelected: (query: string) => Promise<boolean> = async () => false,
+  capability?: FindCapability,
 ): InputTriggerSource {
   const openAfterHostSettles = () => { globalThis.setTimeout(open, 0) }
   const enterSearchMode = (): PickOutcome => {
@@ -88,6 +106,9 @@ export function createFindSource(
         token: '/find ',
         hint: 'Search',
         async submit(args) {
+          if (capability && !capability.composerSearchAllowed()) {
+            return { kind: 'error', text: capability.unavailableError() }
+          }
           try {
             const ran = await executeSelected(args.trimStart())
             return ran ? { kind: 'success' } : { kind: 'error', text: 'No search result selected.' }
@@ -98,12 +119,14 @@ export function createFindSource(
       },
     }
   }
+  const candidateOffered = (): boolean => capability?.composerSearchAllowed() ?? true
   return {
     trigger: FIND_TRIGGER,
     name: FIND_NAME,
     order: 50,
     showGroupTitle: false,
     async candidates(_session: ClientSessionContext): Promise<readonly InputTriggerCandidate[]> {
+      if (!candidateOffered()) return []
       return [{
         name: 'find',
         description: 'Search commands, sessions, models, and conversations',
@@ -129,6 +152,8 @@ export interface RegisterFindSourceOptions {
   readonly ctx: Context
   readonly controller: SearchController
   readonly preferences?: PreferencesStore
+  /** Fail-closed capability face; the claim itself is never gated. */
+  readonly capability?: FindCapability
 }
 
 /**
@@ -171,7 +196,7 @@ export async function registerFindSource(options: RegisterFindSourceOptions): Pr
   }
   // Preserve `this` binding: registerSource uses `this.live` internally.
   return options.ctx.effect(
-    () => registerSource.call(triggers, createFindSource(open, executeSelected)),
+    () => registerSource.call(triggers, createFindSource(open, executeSelected, options.capability)),
     'universal-palette: /find input trigger source',
   )
 }

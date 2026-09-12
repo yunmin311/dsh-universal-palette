@@ -49,6 +49,12 @@ export interface SearchControllerDeps {
   readonly preferences: () => PalettePreferences
   /** Effective cold verdict snapshot getter; surfaces map it to layout. */
   readonly cold: () => boolean
+  /**
+   * Compatibility gate for the Composer Search surface: `!cold() || the host
+   * declares the Hero composer dock`. Active sessions always allow; a Hero
+   * surface on a host without the dock fails closed (no upward fallback).
+   */
+  readonly heroComposerSearchAllowed: () => boolean
 }
 
 /**
@@ -123,8 +129,15 @@ export class SearchController {
     this.deps.aggregator.setQuery(next.draft)
   }
 
-  /** Open Composer-owned Search in the slot-mounted Morph presentation. */
+  /**
+   * Open Composer-owned Search in the slot-mounted Morph presentation.
+   * Fail-closed compatibility gate: a Hero surface (cold) on a host that
+   * does not declare the Hero composer dock never enters the Morph
+   * presentation — the shared `conversation.input.overlay` seat must not
+   * be used as a downward fallback. Active sessions are unaffected.
+   */
   openComposerSearch(sessionId: string, entry: ComposerEntry = 'direct'): void {
+    if (!this.deps.heroComposerSearchAllowed()) return
     this.openMorph(sessionId, entry)
   }
 
@@ -216,6 +229,9 @@ export class SearchController {
 
   /** Returns the effective cold verdict for the surface to map to layout. */
   cold(): boolean { return this.deps.cold() }
+
+  /** Returns the fail-closed Composer Search verdict (`!cold || hero dock declared`). */
+  heroComposerSearchAllowed(): boolean { return this.deps.heroComposerSearchAllowed() }
 
   /** Release all subscribers and tear down the aggregator subscription. */
   dispose(): void {

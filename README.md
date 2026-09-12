@@ -43,7 +43,7 @@ dsh --profile web
 - Type `/find` from the native DSH slash menu, or use the Search button. Bare `/` remains owned by DSH.
 - The Composer remains the only query input. `/find query` stays in the Composer, while the Search button opens the same search directly from the current draft without inserting `/find`.
 - In an active conversation, results appear as a compact DSH-native surface above the Composer.
-- In a zero-turn Hero session, results appear in the same DSH-native surface directly below the Composer: normal document flow, about five visible rows with internal scrolling, never covering the Composer.
+- In a zero-turn Hero session, results appear in the same DSH-native surface directly below the Composer: normal document flow, about five visible rows with internal scrolling, never covering the Composer. **This requires a host that declares the `conversation.hero.composer.dock` seat** — on hosts without it (including stock `0.1.2-rc.1`), Composer Search fails closed on the Hero surface instead of falling back upward; see [Compatibility](#compatibility).
 - Hero and active presentations share the same controller, providers, ranking, and result execution.
 
 **Global search**
@@ -122,7 +122,9 @@ Universal Palette currently has no Provider SDK, and none is planned. The prefer
 
 Verified and locked against `@deepseek-ai/dsh@0.1.2-rc.1` (`deepseek-ai/deepseek-harness@76fda729799fe9b3848dbe2c211d4b231032b81e`). Other DSH revisions are unverified. Details: [COMPATIBILITY.md](docs/COMPATIBILITY.md), [COMMAND_COMPATIBILITY.md](docs/COMMAND_COMPATIBILITY.md).
 
-On the locked DSH `0.1.2-rc.1` Hero surface, session-scoped Composer Morph outlets are not mounted. The Hero downward presentation is currently validated against the local experimental Hero dock contract used by this development build; stock `0.1.2-rc.1` does not expose that seat.
+On the locked DSH `0.1.2-rc.1` Hero surface, session-scoped Composer Morph outlets are not mounted, and stock `0.1.2-rc.1` does not expose the `conversation.hero.composer.dock` seat. Composer Search therefore **fails closed** on the Hero surface: the Search button is disabled, the native slash menu withholds the `/find` candidate, and a hand-typed `/find …` is still claimed but answers with a localized capability error instead of ever reaching the Agent or presenting an upward Morph. Active-session Composer Search and the Global Floating palette (`Alt+Q`) are unaffected.
+
+The Hero downward presentation is enabled on hosts that declare `conversation.hero.composer.dock`. The fully verified host is the maintainer's enhanced fork (`yunmin311/deepseek-harness`, branch `feat/hero-composer-dock`); this is not upstream support, and the fork is maintained as the long-term enhanced host for the full Hero experience.
 
 ## Privacy & Security
 

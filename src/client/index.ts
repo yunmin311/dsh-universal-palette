@@ -31,6 +31,11 @@ import {
 } from './state/preferences.ts'
 import { SearchController } from './search-controller.ts'
 import { subscribeCold, readCold, verdictFromSessions } from './cold.ts'
+import {
+  createActiveOverlaySuppression,
+  createComposerSearchAvailability,
+  createHeroDockAvailability,
+} from './heroDock.ts'
 import { createSidebarObservable } from './sidebarState.ts'
 import { attachKeyboard, type ShortcutReport } from './keyboard.ts'
 import { defaultShortcut } from './shortcut.ts'
@@ -78,6 +83,16 @@ export function sessionCold(ctx: Context): boolean {
   return verdictFromSessions(ctx.sessions as never)
 }
 
+/** Localized fail-closed error for a claimed `/find` on an unsupported Hero surface. */
+function capabilityErrorText(ctx: Context): string {
+  try {
+    const bind = (ctx.locale as unknown as { bind?: (ns: string) => (key: string) => string }).bind
+    const text = typeof bind === 'function' ? bind.call(ctx.locale, NS)('heroSearchUnavailable') : undefined
+    if (typeof text === 'string' && text.length > 0 && !text.includes('heroSearchUnavailable')) return text
+  } catch { /* locale unavailable: use the English default */ }
+  return "Composer Search is unavailable on this host's Hero surface."
+}
+
 function detectBrowserPlatform(): NodeJS.Platform {
   const proc = (globalThis as { process?: { platform?: NodeJS.Platform } }).process
   if (proc && typeof proc.platform === 'string') return proc.platform
@@ -101,10 +116,11 @@ function migrateShortcut(stored: unknown): string {
 interface SearchButtonSlotProps {
   readonly ctx: Context
   readonly controller: SearchController
+  readonly allowed: { readonly getSnapshot: () => boolean; readonly subscribe: (fn: () => void) => () => void }
 }
 
 function SearchButtonSlot(props: SearchButtonSlotProps) {
-  return createElement(SearchButton, { ctx: props.ctx, controller: props.controller })
+  return createElement(SearchButton, { ctx: props.ctx, controller: props.controller, allowed: props.allowed })
 }
 
 /** Register only after ui-layout has declared shell.overlay. */
@@ -135,17 +151,14 @@ function applyInternal(ctx: Context): void {
 
   // Shared SearchController — single source of truth for presentation,
   // query, and result state. Floating and Morph both subscribe to it.
-  const controller = new SearchController({
-    aggregator,
-    preferences: () => preferences.snapshot,
-    cold: () => readCold(ctx),
-  })
-  const heroSeat = createHeroSeatPresence()
-  // Live cold verdict observable. The Float/Morph wrappers subscribe to
-  // it so a real-time `blank` flip mid-open updates the layout height
-  // without restarting the surface. Defensive: a missing list/binding
-  // or partial Session Controller (test mocks) reports cold rather
-  // than throwing — the public surface must remain bootable.
+  //
+  // Fail-closed Hero compatibility: the public slot ledger decides whether
+  // this host declares `conversation.hero.composer.dock`. Active sessions
+  // always allow Composer Search; a Hero surface (cold) on a host without
+  // the dock never opens it — no upward fallback through the shared
+  // `conversation.input.overlay` seat.
+  const heroDockAvailability = createHeroDockAvailability(ctx)
+  ctx.effect(() => () => heroDockAvailability.dispose(), 'universal-palette: hero dock capability')
   let cold
   try {
     cold = subscribeCold(ctx)
@@ -157,6 +170,17 @@ function applyInternal(ctx: Context): void {
       subscribe: () => () => undefined,
     }
   }
+  const composerSearchAvailability = createComposerSearchAvailability(cold, heroDockAvailability)
+  ctx.effect(() => () => composerSearchAvailability.dispose(), 'universal-palette: composer search availability')
+  const overlaySuppression = createActiveOverlaySuppression(cold, composerSearchAvailability)
+  ctx.effect(() => () => overlaySuppression.dispose(), 'universal-palette: active overlay suppression')
+  const controller = new SearchController({
+    aggregator,
+    preferences: () => preferences.snapshot,
+    cold: () => readCold(ctx),
+    heroComposerSearchAllowed: () => composerSearchAvailability.getSnapshot(),
+  })
+  const heroSeat = createHeroSeatPresence()
 
   // Public sidebar footer owner prop supplies wide/compact only.
   const sidebarState = createSidebarObservable()
@@ -258,6 +282,7 @@ function applyInternal(ctx: Context): void {
   }, (props: { sessionId: string; useInput: <T>(selector: (state: InputState) => T) => T; inputActions: InputActions }) => createElement(Morph, {
     ctx, sessionId: props.sessionId, controller, sidebar, aggregator, preferences, heroSeat,
     placement: 'active-up', useInput: props.useInput, inputActions: props.inputActions,
+    overlaySuppressed: overlaySuppression,
   })))
 
   // Composer Search button — strict per-Session scope, list-kind. When
@@ -267,7 +292,7 @@ function applyInternal(ctx: Context): void {
   ctx.slots.inject('conversation.input.left', () => ctx.slots.register({
     name: 'conversation.input.left',
     id: SEARCH_BUTTON_ID,
-  }, () => createElement(SearchButtonSlot, { ctx, controller })
+  }, () => createElement(SearchButtonSlot, { ctx, controller, allowed: composerSearchAvailability })
   ))
 
   // Public slash-pipeline source for `/find`. Registered once in apply
@@ -279,7 +304,13 @@ function applyInternal(ctx: Context): void {
   ctx.effect(() => {
     let cancelled = false
     let disposer: (() => void) | null = null
-    registerFindSource({ ctx, controller, preferences }).then((d) => {
+    registerFindSource({
+      ctx, controller, preferences,
+      capability: {
+        composerSearchAllowed: () => composerSearchAvailability.getSnapshot(),
+        unavailableError: () => capabilityErrorText(ctx),
+      },
+    }).then((d) => {
       if (cancelled) { try { d() } catch { /* ignore */ } return }
       disposer = d
     }).catch((error) => {

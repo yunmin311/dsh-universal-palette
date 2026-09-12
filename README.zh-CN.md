@@ -43,7 +43,7 @@ dsh --profile web
 - 从 DSH 原生 slash 菜单输入 `/find`，或点击 Search 按钮。裸 `/` 仍完全由 DSH 接管。
 - Composer 始终是唯一查询输入框。`/find query` 保留在 Composer 中；Search 按钮则直接从当前 draft 打开同一个搜索，不插入 `/find`。
 - 活动会话中，结果以紧凑的 DSH 原生样式呈现在 Composer 上方。
-- 零轮次 Hero 会话中，结果以同样的 DSH 原生样式直接呈现在 Composer 下方：常规文档流，约 5 行可见加内部滚动，绝不遮挡 Composer。
+- 零轮次 Hero 会话中，结果以同样的 DSH 原生样式直接呈现在 Composer 下方：常规文档流，约 5 行可见加内部滚动，绝不遮挡 Composer。**这要求宿主声明 `conversation.hero.composer.dock` 席位**——在不提供该席位的宿主（包括官方 `0.1.2-rc.1`）上，Hero 页面的 Composer Search 直接 fail closed，绝不向上回退；见[兼容性](#兼容性)。
 - Hero 与活动会话两种呈现共享同一个控制器、同一组 provider、同一套排序与结果执行。
 
 **全局搜索**
@@ -122,7 +122,9 @@ Universal Palette 目前没有 Provider SDK，也没有相关计划。推荐的�
 
 验证并锁定于 `@deepseek-ai/dsh@0.1.2-rc.1`（`deepseek-ai/deepseek-harness@76fda729799fe9b3848dbe2c211d4b231032b81e`）。其他 DSH 版本未经验证。详见 [COMPATIBILITY.md](docs/COMPATIBILITY.md) 与 [COMMAND_COMPATIBILITY.md](docs/COMMAND_COMPATIBILITY.md)。
 
-在锁定的 DSH `0.1.2-rc.1` Hero 界面中，会话级 Composer Morph outlet 不会挂载。Hero 向下呈现目前仅对本开发构建所用的本地实验 Hero dock 契约验证通过；官方 `0.1.2-rc.1` 并不暴露该席位。
+在锁定的 DSH `0.1.2-rc.1` Hero 界面中，会话级 Composer Morph outlet 不会挂载，且官方 `0.1.2-rc.1` 并不暴露 `conversation.hero.composer.dock` 席位。因此 Composer Search 在 Hero 页面**直接 fail closed**：Search 按钮禁用、原生 slash 菜单不展示 `/find` candidate；手工输入的 `/find …` 仍会被 claim，但 Enter 后返回本地化的 capability 错误——既不会把内容提交给 Agent，也绝不会向上回退成 Morph。活动会话的 Composer Search 与全局悬浮面板（`Alt+Q`）不受影响。
+
+Hero 向下呈现仅在声明了 `conversation.hero.composer.dock` 的宿主上启用。当前完整验证的宿主是维护者自己的增强 fork（`yunmin311/deepseek-harness`，分支 `feat/hero-composer-dock`）；这不是 upstream 支持——该 fork 将作为完整 Hero 体验的长期增强宿主进行维护。
 
 ## 隐私与安全
 

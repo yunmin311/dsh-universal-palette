@@ -144,3 +144,82 @@ test('Empty host catalog returns no collisions', async () => {
   const collisions = await findHostFindCollisions(ctx)
   assert.equal(collisions.length, 0)
 })
+
+// ---------------------------------------------------------------------------
+// Fail-closed Hero compatibility for /find: the candidate is withheld on a
+// Hero surface without the dock, but a hand-typed `/find …` is still claimed
+// (never falls through to the Agent pipeline) and answers with the explicit
+// localized capability error.
+// ---------------------------------------------------------------------------
+
+const stockHeroCapability = {
+  composerSearchAllowed: () => false,
+  unavailableError: () => "Composer Search is unavailable on this host's Hero surface.",
+}
+const searchAllowedCapability = {
+  composerSearchAllowed: () => true,
+  unavailableError: () => 'unused',
+}
+
+test('STOCK Hero: candidate list is empty (no /find row in the native slash menu)', async () => {
+  const source = createFindSource(() => undefined, async () => false, stockHeroCapability)
+  const candidates = await source.candidates({ sessionId: 's-hero' } as never, { query: 'fi', position: 'leading', drilled: false, signal: new AbortController().signal })
+  assert.deepEqual(candidates, [])
+})
+
+test('STOCK active: candidate list still offers /find', async () => {
+  // Active sessions compose to allowed=true even on stock.
+  const source = createFindSource(() => undefined, async () => false, searchAllowedCapability)
+  const candidates = await source.candidates({ sessionId: 's-active' } as never, { query: 'fi', position: 'leading', drilled: false, signal: new AbortController().signal })
+  assert.equal(candidates.length, 1)
+  assert.equal(candidates[0]?.name, 'find')
+})
+
+test('FORK Hero: candidate list offers /find', async () => {
+  const source = createFindSource(() => undefined, async () => false, searchAllowedCapability)
+  const candidates = await source.candidates({ sessionId: 's-hero' } as never, { query: 'fi', position: 'leading', drilled: false, signal: new AbortController().signal })
+  assert.equal(candidates.length, 1)
+})
+
+test('STOCK Hero: hand-typed /find is still claimed, never falls through to the Agent', async () => {
+  const executed: string[] = []
+  const source = createFindSource(
+    () => undefined,
+    async query => { executed.push(query); return true },
+    stockHeroCapability,
+  )
+  const result = await source.matchEnter!(
+    { sessionId: 's-hero' } as never,
+    '/find test',
+    new AbortController().signal,
+    { images: 0 },
+  )
+  assert.ok(result && typeof result === 'object' && 'claim' in result)
+  assert.equal(result.claim.token, '/find ')
+})
+
+test('STOCK Hero: claimed Enter answers the explicit capability error', async () => {
+  const executed: string[] = []
+  const source = createFindSource(
+    () => undefined,
+    async query => { executed.push(query); return true },
+    stockHeroCapability,
+  )
+  const result = await source.matchEnter!(
+    { sessionId: 's-hero' } as never,
+    '/find test',
+    new AbortController().signal,
+    { images: 0 },
+  )
+  const settlement = await result?.claim?.submit?.('test', {} as never, [])
+  assert.deepEqual(settlement, { kind: 'error', text: "Composer Search is unavailable on this host's Hero surface." })
+  assert.deepEqual(executed, [])
+})
+
+test('STOCK Hero: matchSpace claim still fires so Space selection cannot leak to the Agent', async () => {
+  const source = createFindSource(() => undefined, async () => false, stockHeroCapability)
+  const out = source.matchSpace!({ sessionId: 's-hero' } as never, '/find')
+  assert.ok(out && typeof out === 'object' && 'claim' in out)
+  const settlement = await out.claim.submit('query', {} as never, [])
+  assert.equal(settlement.kind, 'error')
+})

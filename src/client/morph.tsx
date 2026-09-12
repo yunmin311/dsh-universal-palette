@@ -19,7 +19,11 @@ import { SearchController } from './search-controller.ts'
 import { MorphResults, type MorphPlacement } from './MorphResults.tsx'
 import { composerSearchQuery } from './morphPresentation.ts'
 import { localizedError } from './paletteSurface.tsx'
+import type { AvailabilityObservable } from './heroDock.ts'
 import type { HeroSeatPresence } from './morphSeatPresence.ts'
+
+const subscribeNever = () => () => undefined
+const snapshotFalse = () => false
 
 export interface MorphProps {
   readonly ctx: Context
@@ -32,6 +36,8 @@ export interface MorphProps {
   readonly controller: SearchController
   readonly useInput: <T>(selector: (state: InputState) => T) => T
   readonly inputActions: InputActions
+  /** Live fail-closed gate for the shared active overlay seat (see heroDock.ts). */
+  readonly overlaySuppressed?: AvailabilityObservable
 }
 
 /**
@@ -47,6 +53,15 @@ export function Morph(props: MorphProps) {
     [props.heroSeat, props.placement],
   )
   const heroSeatMounted = useSyncExternalStore(props.heroSeat.subscribe, props.heroSeat.getSnapshot)
+  // Fail-closed compatibility gate for the shared active overlay seat:
+  // a Hero surface (cold) on a host without the Hero composer dock never
+  // presents through `conversation.input.overlay`. Suppression, not
+  // placement routing — the hook stays unconditional (rules of hooks).
+  const overlaySuppressed = useSyncExternalStore(
+    props.overlaySuppressed?.subscribe ?? subscribeNever,
+    props.overlaySuppressed?.getSnapshot ?? snapshotFalse,
+    props.overlaySuppressed?.getSnapshot ?? snapshotFalse,
+  )
   const state = useSyncExternalStore(
     fn => props.controller.subscribe(fn),
     () => props.controller.getState(),
@@ -123,6 +138,7 @@ export function Morph(props: MorphProps) {
   if (state.presentation !== 'morph') return null
   if (state.sessionId !== props.sessionId) return null
   if (props.placement === 'active-up' && heroSeatMounted) return null
+  if (props.placement === 'active-up' && overlaySuppressed) return null
   const displayError = error
     ? localizedError(error, { ctx: props.ctx, hasSession: true, workspaces: [], t })
     : (state.aggregator.failures.length ? t('providerFailed') : '')

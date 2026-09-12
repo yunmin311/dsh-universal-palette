@@ -21,12 +21,13 @@ class StubAggregator extends PaletteAggregator {
   override setQuery(query: string) { this.queries.push(query); super.setQuery(query) }
 }
 
-function mkController(cold = false): { controller: SearchController; aggregator: StubAggregator } {
+function mkController(cold = false, heroComposerSearchAllowed = true): { controller: SearchController; aggregator: StubAggregator } {
   const aggregator = new StubAggregator()
   const controller = new SearchController({
     aggregator,
     preferences: () => ({ pins: {}, frecency: {}, glassIntensity: 'soft', shortcut: '' }),
     cold: () => cold,
+    heroComposerSearchAllowed: () => heroComposerSearchAllowed,
   })
   return { controller, aggregator }
 }
@@ -146,4 +147,46 @@ test('switchPresentation is a no-op when already in that presentation', () => {
   const before = controller.getState().generation
   controller.switchPresentation('floating', null)
   assert.equal(controller.getState().generation, before)
+})
+
+// ---------------------------------------------------------------------------
+// Fail-closed Hero compatibility: a Hero surface (cold) on a host without the
+// Hero composer dock must never enter the Morph presentation, while active
+// sessions and the Global Floating surface stay unaffected.
+// ---------------------------------------------------------------------------
+
+test('STOCK Hero openComposerSearch fails closed: no morph presentation', () => {
+  const { controller } = mkController(true, false)
+  controller.openComposerSearch('s-hero')
+  assert.equal(controller.getState().presentation, null)
+  assert.equal(controller.getState().sessionId, null)
+})
+
+test('STOCK active openComposerSearch still opens Morph', () => {
+  // The composed verdict allows active sessions even on stock (allowed=true);
+  // only the cold Hero surface is gated.
+  const { controller } = mkController(false, true)
+  controller.openComposerSearch('s-active')
+  assert.equal(controller.getState().presentation, 'morph')
+  assert.equal(controller.getState().sessionId, 's-active')
+})
+
+test('FORK Hero openComposerSearch opens Morph for the hero-down seat', () => {
+  const { controller } = mkController(true, true)
+  controller.openComposerSearch('s-hero')
+  assert.equal(controller.getState().presentation, 'morph')
+  assert.equal(controller.getState().sessionId, 's-hero')
+})
+
+test('Hero gate leaves Alt+Q Global Floating unaffected', () => {
+  const { controller } = mkController(true, false)
+  controller.openFloating()
+  assert.equal(controller.getState().presentation, 'floating')
+})
+
+test('openMorph stays unguarded for slot-mounted surfaces', () => {
+  const { controller } = mkController(true, false)
+  controller.openMorph('s-hero')
+  assert.equal(controller.getState().presentation, 'morph')
+  controller.close()
 })

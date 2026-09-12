@@ -17,6 +17,7 @@ export const en = {
   'command.feedback': 'Record feedback about this Session', 'command.plan': 'Enter or leave plan mode',
   feedbackRequired: 'Feedback text is required. Use /feedback <text> in the DSH composer.',
   actionFailed: 'Action unavailable. Check the DSH Session or try again.', providerFailed: 'Some results are unavailable. Try again.',
+  heroSearchUnavailable: "Composer Search is unavailable on this host's Hero surface.",
 }
 export type PaletteKey = keyof typeof en
 export type PaletteTranslate = (key: PaletteKey, params?: Record<string, unknown>) => string
@@ -36,6 +37,7 @@ export const zh: Record<PaletteKey, string> = {
   'command.feedback': '记录对此会话的反馈', 'command.plan': '进入或退出规划模式',
   feedbackRequired: '请在会话输入框使用 /feedback <反馈内容>。',
   actionFailed: '操作暂不可用，请检查当前会话或重试。', providerFailed: '部分结果暂不可用，请重试。',
+  heroSearchUnavailable: '当前宿主的 Hero 页面不支持 Composer Search。',
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
