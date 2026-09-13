@@ -190,3 +190,43 @@ test('openMorph stays unguarded for slot-mounted surfaces', () => {
   assert.equal(controller.getState().presentation, 'morph')
   controller.close()
 })
+
+// --- cleanup ownership (WP4) -------------------------------------------------
+
+test('controller dispose unsubscribes from the aggregator and stops listener fan-out', () => {
+  const aggregator = new PaletteAggregator({
+    providers: [],
+    preferences: () => ({ pins: {}, frecency: {}, glassIntensity: 'soft', shortcut: 'Alt+Q' }),
+  })
+  // Patch before the controller constructor subscribes.
+  let aggregateUnsub = 0
+  const originalSubscribe = aggregator.subscribe.bind(aggregator)
+  ;(aggregator as unknown as { subscribe: typeof aggregator.subscribe }).subscribe = (fn) => {
+    const off = originalSubscribe(fn)
+    return () => { aggregateUnsub++; off() }
+  }
+  const controller = new SearchController({
+    aggregator,
+    preferences: () => ({ pins: {}, frecency: {}, glassIntensity: 'soft', shortcut: 'Alt+Q' }),
+    cold: () => false,
+    heroComposerSearchAllowed: () => true,
+  })
+  let notified = 0
+  controller.subscribe(() => { notified++ })
+  controller.dispose()
+  assert.equal(aggregateUnsub, 1, 'aggregator subscription released exactly once')
+  const before = notified
+  controller.openFloating()
+  assert.equal(notified, before, 'no controller listener fires after dispose')
+})
+
+test('PreferencesStore unsubscribe removes the listener exactly once (no duplicate fan-out)', async () => {
+  const { PreferencesStore } = await import('../../src/client/state/preferences.ts')
+  const store = new PreferencesStore({ load: async () => null, save: async () => {} }, 'Alt+Q')
+  let calls = 0
+  const off = store.subscribe(() => { calls++ })
+  off()
+  off()
+  await store.recordUse('x')
+  assert.equal(calls, 0, 'unsubscribed listener never fires, double-unsub is harmless')
+})

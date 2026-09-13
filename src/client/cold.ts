@@ -63,6 +63,8 @@ export function verdictFromSessions(sessions: Pick<ISessions, 'list' | 'binding'
 export interface ColdObservable {
   getSnapshot(): ColdState
   subscribe(fn: () => void): () => void
+  /** Release the sessions.list and binding subscriptions; idempotent. */
+  dispose(): void
 }
 
 /**
@@ -82,9 +84,11 @@ export function subscribeCold(ctx: Context): ColdObservable {
   const listeners = new Set<() => void>()
   let bindingOff: (() => void) | undefined
   let sessionsOff: (() => void) | undefined
+  let disposed = false
   const notify = () => { for (const fn of listeners) fn() }
 
   const rebind = () => {
+    if (disposed) return
     bindingOff?.()
     bindingOff = undefined
     const list = ctx.sessions?.list
@@ -105,6 +109,7 @@ export function subscribeCold(ctx: Context): ColdObservable {
     if (next !== verdict) { verdict = next; notify() }
     const observed = binding.session.getSnapshot?.()
     bindingOff = binding.session.subscribe(() => {
+      if (disposed) return
       const confirmed = verdictFromSnapshot(binding.session.getSnapshot?.())
       if (confirmed !== verdict) { verdict = confirmed; notify() }
     })
@@ -123,8 +128,18 @@ export function subscribeCold(ctx: Context): ColdObservable {
   return {
     getSnapshot: () => verdict,
     subscribe(fn) {
+      if (disposed) return () => {}
       listeners.add(fn)
       return () => { listeners.delete(fn) }
+    },
+    dispose() {
+      if (disposed) return
+      disposed = true
+      sessionsOff?.()
+      sessionsOff = undefined
+      bindingOff?.()
+      bindingOff = undefined
+      listeners.clear()
     },
   }
 }

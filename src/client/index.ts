@@ -23,6 +23,7 @@ import {
   createConversationHitsProvider,
   createModelsProvider,
   createSessionsProvider,
+  currentPaletteContext,
 } from './adapters.ts'
 import { bridgeKeysActions } from './keysActions.ts'
 import {
@@ -136,7 +137,9 @@ function applyInternal(ctx: Context): void {
       createConversationHitsProvider(ctx.sessions),
     ],
     preferences: () => preferences.snapshot,
-    context: () => ({}),
+    // Live public-context boost: workspace/session/provider weighting in
+    // rankItems reads the real current session and its owning workspace.
+    context: () => currentPaletteContext(ctx.sessions, ctx.workspaces),
   })
 
   // Shared SearchController — single source of truth for presentation,
@@ -158,8 +161,10 @@ function applyInternal(ctx: Context): void {
     cold = {
       getSnapshot: () => false,
       subscribe: () => () => undefined,
+      dispose: () => {},
     }
   }
+  ctx.effect(() => () => cold.dispose(), 'universal-palette: cold observable')
   const composerSearchAvailability = createComposerSearchAvailability(cold, heroDockAvailability)
   ctx.effect(() => () => composerSearchAvailability.dispose(), 'universal-palette: composer search availability')
   const overlaySuppression = createActiveOverlaySuppression(cold, composerSearchAvailability)
@@ -171,6 +176,13 @@ function applyInternal(ctx: Context): void {
     heroComposerSearchAllowed: () => composerSearchAvailability.getSnapshot(),
   })
   const heroSeat = createHeroSeatPresence()
+  // Apply-lifetime objects: release subscriptions, listeners and pending
+  // query timers when the plugin fiber unloads (reload cycles).
+  ctx.effect(() => () => {
+    aggregator.dispose()
+    controller.dispose()
+    preferences.dispose()
+  }, 'universal-palette: palette core cleanup')
 
   // Public sidebar footer owner prop supplies wide/compact only.
   const sidebarState = createSidebarObservable()

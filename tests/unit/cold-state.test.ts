@@ -147,3 +147,54 @@ test('stale-unknown: a confirmed cold verdict is not collapsed when the binding 
   for (const fn of sessionSubscribers) fn()
   assert.equal(cold.getSnapshot(), false)
 })
+
+// --- dispose lifecycle (WP4) ------------------------------------------------
+
+test('subscribeCold dispose unsubscribes from sessions.list and the binding', () => {
+  let listUnsub = 0
+  let bindingUnsub = 0
+  const sessionSubscribers: Array<() => void> = []
+  const session = {
+    getSnapshot() { return { blank: true } },
+    subscribe(fn: () => void) { sessionSubscribers.push(fn); return () => { bindingUnsub++ } },
+  }
+  const ctx = {
+    sessions: {
+      list: {
+        getSnapshot: () => ({ current: 's1' }),
+        subscribe(_fn: () => void) { return () => { listUnsub++ } },
+      },
+      binding: () => ({ session }),
+    },
+  } as never
+  const cold = subscribeCold(ctx as never)
+  cold.dispose()
+  assert.equal(listUnsub, 1, 'sessions.list subscription released')
+  assert.equal(bindingUnsub, 1, 'binding subscription released')
+})
+
+test('after dispose, session mutations no longer notify or rebind', () => {
+  const listSubscribers: Array<() => void> = []
+  const sessionSubscribers: Array<() => void> = []
+  let blank = true
+  let notified = 0
+  const session = {
+    getSnapshot() { return { blank } },
+    subscribe(fn: () => void) { sessionSubscribers.push(fn); return () => {} },
+  }
+  const ctx = {
+    sessions: {
+      list: {
+        getSnapshot: () => ({ current: 's1' }),
+        subscribe(fn: () => void) { listSubscribers.push(fn); return () => {} },
+      },
+      binding: () => ({ session }),
+    },
+  } as never
+  const cold = subscribeCold(ctx as never)
+  cold.subscribe(() => { notified++ })
+  cold.dispose()
+  blank = false
+  for (const fn of [...listSubscribers, ...sessionSubscribers]) fn()
+  assert.equal(notified, 0, 'no listener fires after dispose')
+})
