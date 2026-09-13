@@ -141,74 +141,74 @@ export class PaletteAggregator {
 
     const collectPromises = this.providers.map((p) => this.collectOne(p, input, controller.signal))
 
-    const settled = await Promise.race<'all' | 'deadline'>([
-      Promise.allSettled(collectPromises).then(() => 'all' as const),
-      new Promise<'deadline'>((resolve) =>
-        setTimeout(() => resolve('deadline'), this.softDeadlineMs),
-      ),
-    ])
-
-    if (controller.signal.aborted) return
-    void settled
-
+    // One shared soft deadline per query: the deadline publishes whatever
+    // has resolved by then, providers still in flight are marked `late`
+    // and their data is ignored until the next query. Late providers can
+    // therefore never multiply the wall-clock latency, and fast results
+    // are never held hostage by a slow peer.
     const collected: PaletteItem[] = []
     const failures: { providerId: string; reason: string }[] = []
-    for (let i = 0; i < collectPromises.length; i++) {
-      const promise = collectPromises[i]
-      const provider = this.providers[i]
-      if (!promise || !provider) continue
-      try {
-        const r = await Promise.race([
-          promise,
-          new Promise<'late'>((resolve) =>
-            setTimeout(() => resolve('late'), Math.max(50, this.softDeadlineMs)),
-          ),
-        ])
-        if (r === 'late') {
-          failures.push({ providerId: provider.id, reason: 'late' })
-        } else if (r.kind === 'ok') {
-          collected.push(...r.items)
-        } else if (r.kind === 'fail' && r.reason !== 'aborted') {
-          failures.push({ providerId: r.providerId, reason: r.reason })
-        }
-      } catch {
-        failures.push({ providerId: provider.id, reason: 'failed' })
+    const settled = collectPromises.map(() => false)
+
+    const publish = (): void => {
+      if (controller.signal.aborted) return
+      const ranked = rankItems(collected, {
+        query: effectiveQuery,
+        context,
+        preferences: this.preferencesGetter(),
+        now: this.nowFn(),
+        actionsHint,
+      })
+      const capped = ranked.slice(0, this.hardLimit)
+      this.state = {
+        status: capped.length === 0 ? 'empty' : 'ready',
+        query: effectiveQuery,
+        actionsHint,
+        items: capped,
+        failures: [...failures],
+        seq,
       }
+      this.notify()
     }
 
-    if (controller.signal.aborted) return
+    await new Promise<void>((resolve) => {
+      let done = false
+      const finish = () => {
+        if (done) return
+        done = true
+        clearTimeout(deadlineTimer)
+        controller.signal.removeEventListener('abort', onAbort)
+        resolve()
+      }
+      const onAbort = () => finish()
+      const deadlineTimer = setTimeout(() => {
+        for (let i = 0; i < settled.length; i++) {
+          if (!settled[i]) failures.push({ providerId: this.providers[i]!.id, reason: 'late' })
+        }
+        publish()
+        finish()
+      }, this.softDeadlineMs)
+      controller.signal.addEventListener('abort', onAbort, { once: true })
 
-    const ranked = rankItems(collected, {
-      query: effectiveQuery,
-      context,
-      preferences: this.preferencesGetter(),
-      now: this.nowFn(),
-      actionsHint,
+      if (collectPromises.length === 0) {
+        publish()
+        finish()
+        return
+      }
+      collectPromises.forEach((promise, i) => {
+        void promise.then(result => {
+          settled[i] = true
+          if (result.kind === 'ok') collected.push(...result.items)
+          else if (result.kind === 'fail' && result.reason !== 'aborted') {
+            failures.push({ providerId: result.providerId, reason: result.reason })
+          }
+          if (!done && settled.every(Boolean)) {
+            publish()
+            finish()
+          }
+        })
+      })
     })
-
-    const capped = ranked.slice(0, this.hardLimit)
-    this.state = {
-      status: capped.length === 0 ? 'empty' : 'ready',
-      query: effectiveQuery,
-      actionsHint,
-      items: capped,
-      failures,
-      seq,
-    }
-    this.notify()
-  }
-
-  async recordUse(itemId: string): Promise<void> {
-    const prefs = this.preferencesGetter()
-    const next: Record<string, { count: number; lastUsedAt: number }> = {
-      ...prefs.frecency,
-    }
-    const prev = next[itemId]
-    next[itemId] = {
-      count: (prev?.count ?? 0) + 1,
-      lastUsedAt: Date.now(),
-    }
-    await Promise.resolve()
   }
 
   private async collectOne(
