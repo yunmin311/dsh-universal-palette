@@ -7,6 +7,7 @@ import type { PreferencesStore } from './state/preferences.ts'
 import type { SidebarObservable } from './sidebarState.ts'
 import { SearchController, type SearchState } from './search-controller.ts'
 import type { ColdObservable } from './cold.ts'
+import type { ConflictObservable } from './shortcutConflicts.ts'
 import { UniversalPalette } from './UniversalPalette.tsx'
 import { prepareView, localizedError } from './paletteSurface.tsx'
 import type { PaletteAction, PaletteItem } from '../shared/contract.ts'
@@ -19,6 +20,8 @@ export interface FloatingProps {
   readonly cold: ColdObservable
   readonly paletteControl: { toggle: () => void }
   readonly controller: SearchController
+  /** Live shortcut-conflict verdict for the in-palette notice. */
+  readonly shortcutConflicts?: ConflictObservable
 }
 
 export function Floating(props: FloatingProps) {
@@ -31,7 +34,11 @@ const cold = useSyncExternalStore(props.cold.subscribe, props.cold.getSnapshot)
     fn => controller.subscribe(fn),
     () => controller.getState(),
   )
-  const [conflicts] = useState<readonly string[]>([])
+  const conflicts = useSyncExternalStore(
+    props.shortcutConflicts?.subscribe ?? (() => () => undefined),
+    props.shortcutConflicts?.getSnapshot ?? (() => null),
+    props.shortcutConflicts?.getSnapshot ?? (() => null),
+  )
   const returnFocus = useRef<HTMLElement | null>(null)
   const [view, setView] = useState(() => buildView(state, props, t, controller))
   useEffect(() => {
@@ -104,7 +111,8 @@ const cold = useSyncExternalStore(props.cold.subscribe, props.cold.getSnapshot)
       error={displayError}
       items={view.items}
       selectedIndex={Math.min(state.selectedIndex, Math.max(0, view.items.length - 1))}
-      conflicts={conflicts}
+      conflicts={conflicts?.owners ?? []}
+      shortcut={conflicts?.shortcut}
       actionPanelOpen={state.actionPanelOpen}
       actionPanelSelectedIndex={state.actionPanelSelectedIndex}
       onSelectedIndexChange={(i) => controller.setSelectedIndex(i)}

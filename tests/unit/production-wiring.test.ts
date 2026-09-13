@@ -27,16 +27,18 @@ interface Harness {
   sessionUnsubs: number
   runDisposers(): void
   disposerLabels: string[]
+  conflictSnapshots: unknown[]
   setCurrent(next: string | undefined): void
 }
 
-function makeHarness(): Harness {
+function makeHarness(options: { localStorageSeed?: string } = {}): Harness {
   const aggregatorCaptures: { context(): unknown; providers: { id: string }[] }[] = []
   const disposeCalls: string[] = []
   const aggregateUnsubs: string[] = []
   let sessionUnsubs = 0
   const disposerLabels: string[] = []
   const disposers: (() => void)[] = []
+  const conflictSnapshots: unknown[] = []
   let current: string | undefined = 's1'
 
   class CapturingAggregator {
@@ -68,6 +70,21 @@ function makeHarness(): Harness {
     },
     readCold: () => false,
     verdictFromSessions: () => false,
+  }
+
+  const conflictStub = {
+    createConflictObservable: () => ({
+      getSnapshot: () => null,
+      subscribe: () => () => {},
+      set: (next: unknown) => { conflictSnapshots.push(next) },
+    }),
+  }
+
+  if (options.localStorageSeed !== undefined) {
+    ;(globalThis as unknown as { localStorage: unknown }).localStorage = {
+      getItem: () => options.localStorageSeed,
+      setItem: () => {},
+    }
   }
 
   const ctx = {
@@ -105,6 +122,7 @@ function makeHarness(): Harness {
   const req = (id: string): unknown => {
     if (id.endsWith('./aggregator.ts')) return { PaletteAggregator: CapturingAggregator }
     if (id.endsWith('./cold.ts')) return coldStub
+    if (id.endsWith('./shortcutConflicts.ts')) return conflictStub
     return id.endsWith('.tsx') ? {} : realRequire(id)
   }
 
@@ -119,6 +137,7 @@ function makeHarness(): Harness {
     aggregateUnsubs,
     get sessionUnsubs() { return sessionUnsubs },
     disposerLabels,
+    conflictSnapshots,
     setCurrent(next: string | undefined) { current = next },
     runDisposers() { for (const d of disposers) d() },
   }
@@ -142,6 +161,22 @@ test('production aggregator receives the live ranking context (sessionId + works
   h.setCurrent(undefined)
   assert.deepEqual(captured.context(), {})
   assert.equal(captured.providers.length, 4)
+})
+
+test('shortcut conflict verdict is exposed and follows runtime shortcut changes', async () => {
+  const h = makeHarness({ localStorageSeed: JSON.stringify({ shortcut: 'Alt+M' }) })
+  h.apply()
+  await new Promise(resolve => setTimeout(resolve, 20))
+  // Initial attach (platform default Alt+Q: no known conflict -> null),
+  // then the customized Alt+M loads and the watcher rebinds to a known
+  // conflict, so the notice can follow the runtime change.
+  assert.equal(h.conflictSnapshots[0], null)
+  assert.deepEqual(
+    h.conflictSnapshots[1],
+    { shortcut: 'Alt+M', owners: ['dsh-model-palette'] },
+    'conflict verdict follows the rebound shortcut',
+  )
+  h.runDisposers()
 })
 
 test('apply registers cleanup for the cold observable, aggregator and controller', async () => {

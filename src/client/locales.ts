@@ -9,7 +9,7 @@ export const en = {
   newHint: 'Create or open a blank Session', chooseHint: 'Choose a workspace, then start a Session', recentHint: 'Open an existing conversation',
   noRecent: 'No recent sessions yet. Start a Session from the sidebar.', empty: 'Choose a workspace or start a Session to continue.',
   current: 'Current', commands: 'Quick actions', models: 'Models', history: 'History', actions: 'Actions',
-  footer: '↑↓ Navigate · Enter Open/Run · Tab Actions · Esc Close', open: 'Open', untitled: 'Untitled Session',
+  footer: '↑↓ Navigate · Enter Open/Run · Esc Close', open: 'Open', untitled: 'Untitled Session',
   idle: 'Idle', running: 'Running', justNow: 'Just now', minutes: '{n}m ago', hours: '{n}h ago', days: '{n}d ago',
   modelChoice: 'Select this model', modelPicker: 'Open DSH model selector', high: 'High', low: 'Low', medium: 'Medium',
   'command.goal': 'Set or view the goal for a long-running task', 'command.permission': 'View or change the permission preset',
@@ -17,6 +17,7 @@ export const en = {
   'command.feedback': 'Record feedback about this Session', 'command.plan': 'Enter or leave plan mode',
   feedbackRequired: 'Feedback text is required. Use /feedback <text> in the DSH composer.',
   actionFailed: 'Action unavailable. Check the DSH Session or try again.', providerFailed: 'Some results are unavailable. Try again.',
+  shortcutConflict: '"{shortcut}" is also used by {owners}.',
   heroSearchUnavailable: "Composer Search is unavailable on this host's Hero surface.",
 }
 export type PaletteKey = keyof typeof en
@@ -29,7 +30,7 @@ export const zh: Record<PaletteKey, string> = {
   newHint: '创建或打开空白会话', chooseHint: '先选择工作区，再开始会话', recentHint: '打开已有对话',
   noRecent: '暂无最近会话，可从侧栏开始新会话。', empty: '选择工作区或开始会话以继续。',
   current: '当前', commands: '快捷操作', models: '模型', history: '历史', actions: '操作',
-  footer: '↑↓ 移动 · Enter 打开/执行 · Tab 操作 · Esc 关闭', open: '打开', untitled: '未命名会话',
+  footer: '↑↓ 移动 · Enter 打开/执行 · Esc 关闭', open: '打开', untitled: '未命名会话',
   idle: '空闲', running: '运行中', justNow: '刚刚', minutes: '{n}分钟前', hours: '{n}小时前', days: '{n}天前',
   modelChoice: '选择此模型', modelPicker: '打开模型选择器', high: '高', low: '低', medium: '中',
   'command.goal': '设置或查看长期任务目标', 'command.permission': '查看或切换权限预设',
@@ -37,6 +38,7 @@ export const zh: Record<PaletteKey, string> = {
   'command.feedback': '记录对此会话的反馈', 'command.plan': '进入或退出规划模式',
   feedbackRequired: '请在会话输入框使用 /feedback <反馈内容>。',
   actionFailed: '操作暂不可用，请检查当前会话或重试。', providerFailed: '部分结果暂不可用，请重试。',
+  shortcutConflict: '"{shortcut}" 同时被 {owners} 使用。',
   heroSearchUnavailable: '当前宿主的 Hero 页面不支持 Composer Search。',
 }
 

@@ -39,6 +39,7 @@ import {
 } from './heroDock.ts'
 import { createSidebarObservable } from './sidebarState.ts'
 import { attachKeyboard, type ShortcutReport } from './keyboard.ts'
+import { createConflictObservable } from './shortcutConflicts.ts'
 import { defaultShortcut } from './shortcut.ts'
 import { Floating } from './floating.tsx'
 import { Morph } from './morph.tsx'
@@ -218,28 +219,12 @@ function applyInternal(ctx: Context): void {
   // state. PreferencesStore owns migration and persistence, so its snapshot
   // is the single effective shortcut source from the moment it is created.
   let activeShortcut = preferences.snapshot.shortcut
-  const keyboard = attachKeyboard({
-    shortcut: activeShortcut,
-    isOpen: () => controller.getState().presentation === 'floating',
-    onOpen: () => controller.openFloating(),
-    onClose: () => controller.close(),
-    onEscape: () => controller.close(),
-    onConflictDetected: (report: ShortcutReport) => {
-      // eslint-disable-next-line no-console
-      console.warn('[dsh-universal-palette] shortcut conflict:', report)
-    },
-  })
-  ctx.effect(() => () => keyboard.dispose(), 'universal-palette: keyboard listener')
-
-  // Watch the preferences shortcut so a runtime change updates the
-  // keyboard listener with the migrated value. The listener is the same
-  // function identity across changes; we dispose and replace it.
-  ctx.effect(() => preferences.subscribe(() => {
-    const nextActive = preferences.snapshot.shortcut
-    if (nextActive === activeShortcut) return
-    keyboard.dispose()
-    const replacement = attachKeyboard({
-      shortcut: nextActive,
+  // Live conflict verdict for the in-palette notice (WP5 diagnostics):
+  // recomputed on every attach, so a runtime shortcut change updates it.
+  const shortcutConflicts = createConflictObservable()
+  const attach = (shortcut: string) => {
+    const handle = attachKeyboard({
+      shortcut,
       isOpen: () => controller.getState().presentation === 'floating',
       onOpen: () => controller.openFloating(),
       onClose: () => controller.close(),
@@ -249,6 +234,24 @@ function applyInternal(ctx: Context): void {
         console.warn('[dsh-universal-palette] shortcut conflict:', report)
       },
     })
+    const report = handle.reportConflicts()
+    shortcutConflicts.set(report.conflictsWith.length > 0
+      ? { shortcut: report.shortcut, owners: report.conflictsWith }
+      : null)
+    return handle
+  }
+  const keyboard = attach(activeShortcut)
+  ctx.effect(() => () => keyboard.dispose(), 'universal-palette: keyboard listener')
+
+  // Watch the preferences shortcut so a runtime change updates the
+  // keyboard listener (and the conflict verdict) with the migrated value.
+  // The listener is the same function identity across changes; we dispose
+  // and replace it.
+  ctx.effect(() => preferences.subscribe(() => {
+    const nextActive = preferences.snapshot.shortcut
+    if (nextActive === activeShortcut) return
+    keyboard.dispose()
+    const replacement = attach(nextActive)
     activeShortcut = nextActive
     ;(keyboard as { dispose: () => void }).dispose = replacement.dispose.bind(replacement)
   }), 'universal-palette: shortcut migration watcher')
@@ -257,7 +260,7 @@ function applyInternal(ctx: Context): void {
   // wrapper receives the shared controller so its keyboard handler and
   // paletteControl.toggle drive the same presentation state.
   const FloatingEntry = () => createElement(Floating, {
-    ctx, sidebar, aggregator, preferences, cold, paletteControl, controller,
+    ctx, sidebar, aggregator, preferences, cold, paletteControl, controller, shortcutConflicts,
   })
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',

@@ -28,6 +28,8 @@ export interface UniversalPaletteProps {
   readonly actionPanelSelectedIndex: number
   readonly onActionPanelIndexChange: (next: number) => void
   readonly conflicts: readonly string[]
+  /** Effective shortcut for the conflict notice (see shortcutConflicts.ts). */
+  readonly shortcut?: string
   readonly rootDataAttributes?: Readonly<Record<string, string>>
 }
 
@@ -116,6 +118,9 @@ export function UniversalPalette(props: UniversalPaletteProps) {
       {(props.guidance || props.contextHint) && <div className={css.guidance}>
         {props.guidance && <div className={css.heading}>{props.guidance}</div>}
         {props.contextHint && <div className={css.hint}>{props.contextHint}</div>}
+      </div>}
+      {props.conflicts.length > 0 && <div className={css.guidance} data-conflict="true">
+        <div className={css.hint} role="status">{props.t('shortcutConflict', { shortcut: props.shortcut ?? '', owners: props.conflicts.join(', ') })}</div>
       </div>}
       {props.error && <div className={css.error} role="alert">{props.error}</div>}
       <div className={css.list} id="up-results" role="listbox" aria-label={props.t('results')}>

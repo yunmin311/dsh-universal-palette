@@ -44,13 +44,16 @@ export function SearchButton(props: SearchButtonProps) {
     // Keep the resident Composer focused: it remains the sole Morph input.
     event.preventDefault()
   }
+  // Fail-closed diagnostics: a disabled button must explain WHY (stock Hero
+  // without the composer dock), using the existing owned locale copy.
+  const label = allowed ? t('palette') : t('heroSearchUnavailable')
   return (
     <button
       type="button"
       data-plugin="dsh-universal-palette"
       data-search-button="true"
-      aria-label={t('palette')}
-      title={t('palette')}
+      aria-label={label}
+      title={label}
       disabled={!allowed}
       onPointerDown={onPointerDown}
       onClick={() => {
