@@ -9,7 +9,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createFindSource, findHostFindCollisions, PublicSlashFindCollision } from '../../src/client/findSource.ts'
+import { createFindSource, findHostFindCollisions, PublicSlashFindCollision, registerFindSource } from '../../src/client/findSource.ts'
 
 function fakeController() {
   const calls: string[] = []
@@ -117,12 +117,18 @@ test('Hero /find enters the same persistent claim as active Composer search', as
   assert.deepEqual(ctrl.calls, ['cold'])
 })
 
-test('Host command catalog collision returns find name', async () => {
+// The real rc1 public contract: `list(agentId) => Promise<RemoteResult<
+// readonly CommandDescriptor[]>>` — `value` is a flat descriptor ARRAY
+// (node_modules/@deepseek-ai/dsh-commands/lib/typert.remote-client.d.ts:13).
+// These tests intentionally shape the mock after that contract, not after
+// the implementation's historical `{ value: { items } }` misreading.
+
+test('Host command catalog collision returns find name (real rc1 array shape)', async () => {
   const ctx = {
     sessions: { list: { getSnapshot: () => ({ current: 's1' }) } },
     remote: {
       commands: {
-        list: async () => ({ ok: true, value: { items: [{ name: 'find' }, { name: 'help' }] } }),
+        list: async () => ({ ok: true, value: [{ name: 'find', description: 'Host find' }, { name: 'help', description: 'Help' }] }),
       },
     },
   } as never
@@ -136,13 +142,126 @@ test('PublicSlashFindCollision carries the host-side name', () => {
   assert.match(err.message, /Host command catalog/)
 })
 
-test('Empty host catalog returns no collisions', async () => {
+test('Empty host catalog returns no collisions (real rc1 array shape)', async () => {
   const ctx = {
     sessions: { list: { getSnapshot: () => ({ current: 's1' }) } },
-    remote: { commands: { list: async () => ({ ok: true, value: { items: [] } }) } },
+    remote: { commands: { list: async () => ({ ok: true, value: [] }) } },
   } as never
   const collisions = await findHostFindCollisions(ctx)
   assert.equal(collisions.length, 0)
+})
+
+test('Host catalog unavailable (ok:false) returns no collisions and does not throw', async () => {
+  const ctx = {
+    sessions: { list: { getSnapshot: () => ({ current: 's1' }) } },
+    remote: { commands: { list: async () => ({ ok: false, error: { code: 'X', message: 'down' } }) } },
+  } as never
+  const collisions = await findHostFindCollisions(ctx)
+  assert.equal(collisions.length, 0)
+})
+
+test('Host catalog success with a non-array value fails closed instead of claiming /find', async () => {
+  const ctx = {
+    sessions: { list: { getSnapshot: () => ({ current: 's1' }) } },
+    remote: { commands: { list: async () => ({ ok: true, value: { items: [{ name: 'find' }] } }) } },
+  } as never
+  await assert.rejects(() => findHostFindCollisions(ctx), /unexpected shape/i)
+})
+
+// ---------------------------------------------------------------------------
+// registerFindSource: verdict at registration + cold-start re-verdict.
+// ---------------------------------------------------------------------------
+
+interface FindSourceCtx {
+  sessions: { list: { getSnapshot: () => { current?: string }; subscribe: (fn: () => void) => () => void } }
+  remote: { commands: { list: (id: unknown) => Promise<{ ok: boolean; value?: readonly { name: string; description: string }[] }> } }
+  inputTriggers?: { registerSource: (src: unknown) => () => void }
+  effect(fn: () => unknown): () => void
+}
+
+function makeRegistrationCtx(overrides: Partial<FindSourceCtx> = {}) {
+  let current: string | undefined
+  const sessionListeners = new Set<() => void>()
+  let catalog: readonly { name: string; description: string }[] = [{ name: 'help', description: 'Help' }]
+  const registered: unknown[] = []
+  let unregisterCount = 0
+  const ctx: FindSourceCtx = {
+    sessions: {
+      list: {
+        getSnapshot: () => ({ current }),
+        subscribe: fn => { sessionListeners.add(fn); return () => { sessionListeners.delete(fn) } },
+      },
+    },
+    remote: { commands: { list: async () => ({ ok: true, value: catalog }) } },
+    inputTriggers: {
+      registerSource: src => {
+        registered.push(src)
+        return () => { unregisterCount++ }
+      },
+    },
+    effect(fn) {
+      const cleanup = fn()
+      return () => { if (typeof cleanup === 'function') (cleanup as () => void)() }
+    },
+    ...overrides,
+  }
+  return {
+    ctx,
+    registered,
+    get unregisterCount() { return unregisterCount },
+    setCurrent(next: string | undefined) { current = next },
+    setCatalog(next: readonly { name: string; description: string }[]) { catalog = next },
+    emitSessionChange() { for (const fn of [...sessionListeners]) fn() },
+  }
+}
+
+const registrationController = { openComposerSearch: () => {} } as never
+
+test('registerFindSource registers the source when the host catalog has no find command', async () => {
+  const harness = makeRegistrationCtx()
+  harness.setCurrent('s1')
+  const disposer = await registerFindSource({ ctx: harness.ctx as never, controller: registrationController })
+  assert.equal(harness.registered.length, 1, 'exactly one source registered')
+  disposer()
+  assert.equal(harness.unregisterCount, 1, 'disposer releases the registration')
+})
+
+test('registerFindSource refuses to shadow a host /find already present at registration', async () => {
+  const harness = makeRegistrationCtx()
+  harness.setCurrent('s1')
+  harness.setCatalog([{ name: 'find', description: 'Host find' }])
+  await assert.rejects(
+    () => registerFindSource({ ctx: harness.ctx as never, controller: registrationController }),
+    (error: unknown) => error instanceof PublicSlashFindCollision,
+  )
+  assert.equal(harness.registered.length, 0, 'no palette source registered over the host command')
+})
+
+test('cold start: registers without a session, withdraws the claim once a session with a host find appears', async () => {
+  const harness = makeRegistrationCtx()
+  harness.setCurrent(undefined)
+  const disposer = await registerFindSource({ ctx: harness.ctx as never, controller: registrationController })
+  assert.equal(harness.registered.length, 1, 'cold start registers (no session to probe yet)')
+
+  harness.setCurrent('s1')
+  harness.setCatalog([{ name: 'find', description: 'Host find' }])
+  harness.emitSessionChange()
+  await new Promise(resolve => setTimeout(resolve, 20))
+  assert.equal(harness.unregisterCount, 1, 'palette /find claim withdrawn so the host command is not shadowed')
+  assert.equal(harness.registered.length, 1, 'no duplicate re-registration')
+  disposer()
+})
+
+test('cold start: keeps the source registered when the session appears on a host without find', async () => {
+  const harness = makeRegistrationCtx()
+  harness.setCurrent(undefined)
+  const disposer = await registerFindSource({ ctx: harness.ctx as never, controller: registrationController })
+  harness.setCurrent('s1')
+  harness.emitSessionChange()
+  await new Promise(resolve => setTimeout(resolve, 20))
+  assert.equal(harness.unregisterCount, 0, 'no collision: source stays registered')
+  assert.equal(harness.registered.length, 1)
+  disposer()
 })
 
 // ---------------------------------------------------------------------------

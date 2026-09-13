@@ -21,6 +21,8 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { InputTriggerSource, InputTriggerCandidate, PickOutcome, ClientSessionContext, SubmitEnvelope } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
+import type { CommandDescriptor } from '@deepseek-ai/dsh-commands/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SearchController } from './search-controller.ts'
 import type { PreferencesStore } from './state/preferences.ts'
 
@@ -37,9 +39,9 @@ function isHostFindCollision(value: unknown): value is HostFindCollision {
 }
 
 export function makeFindCollision(collisions: readonly string[]): HostFindCollision {
-  const err = new Error(`Host command catalog already registers 'find' (${collisions.join(', ')}); Universal Palette will not register /find.`) as HostFindCollision
-  ;(err as unknown as { code: string }).code = 'PUBLIC_SLASH_FIND_COLLISION'
-  return err
+  // A real PublicSlashFindCollision instance (not a plain tagged Error) so
+  // callers can pattern-match with instanceof.
+  return new PublicSlashFindCollision(collisions) as HostFindCollision
 }
 
 export class PublicSlashFindCollision extends Error {
@@ -50,23 +52,48 @@ export class PublicSlashFindCollision extends Error {
 }
 
 /**
+ * A successful `commands.list` response whose payload does not match the
+ * locked rc1 shape (`readonly CommandDescriptor[]`). Treated as fail-closed:
+ * the catalog cannot be read, so the palette must not claim `/find`.
+ */
+export class HostCatalogContractError extends Error {
+  public readonly code = 'HOST_COMMAND_CATALOG_SHAPE' as const
+  constructor() {
+    super('Host command catalog returned a successful response with an unexpected shape; Universal Palette will not claim /find.')
+  }
+}
+
+/**
+ * Real rc1 public contract face for the Host command catalog
+ * (dsh-commands typert.remote-client: `list(agentId) =>
+ * Promise<RemoteResult<readonly CommandDescriptor[]>>`).
+ */
+type HostCommandsList =
+  (agentId: SessionId) => Promise<{ ok: boolean; value?: readonly CommandDescriptor[] }>
+
+/**
  * Probe the Host command catalog for an exact `find` command name.
  * Returns the colliding command names (case-sensitive) or an empty
  * array when the catalog is empty / not yet loaded / unavailable.
+ * A successful response whose payload is not the contracted descriptor
+ * array throws `HostCatalogContractError` (fail closed: the catalog
+ * cannot be read, so the palette must not claim `/find`).
  */
 export async function findHostFindCollisions(ctx: Context): Promise<readonly string[]> {
   const current = ctx.sessions?.list?.getSnapshot?.()?.current
   if (current === undefined) return []
-  const remote = (ctx as unknown as { remote?: { commands?: { list?: (id: unknown) => Promise<{ ok: boolean; value?: { items: readonly { name: string }[] } }> } } }).remote
+  const remote = (ctx as unknown as { remote?: { commands?: { list?: HostCommandsList } } }).remote
   const list = remote?.commands?.list
   if (typeof list !== 'function') return []
+  let result: Awaited<ReturnType<HostCommandsList>>
   try {
-    const result = await list(current)
-    if (!result.ok || result.value === undefined) return []
-    return result.value.items.filter((entry) => entry.name === 'find').map((entry) => entry.name)
+    result = await list(current)
   } catch {
     return []
   }
+  if (!result.ok || result.value === undefined) return []
+  if (!Array.isArray(result.value)) throw new HostCatalogContractError()
+  return result.value.filter(entry => entry?.name === 'find').map(entry => entry.name)
 }
 
 /**
@@ -160,15 +187,20 @@ export interface RegisterFindSourceOptions {
  * Register the /find Input Trigger source.
  *
  * Order:
- * 1. Probe the Host command catalog for an exact `find` command name.
- * 2. If a collision exists, throw `PublicSlashFindCollision`.
- * 3. Otherwise register the source via `ctx.inputTriggers.registerSource`
- *    wrapped in `ctx.effect` so the disposer is released on plugin unload.
+ * 1. Probe the Host command catalog for an exact `find` command name for
+ *    the session present at registration time, if any. A collision throws
+ *    `PublicSlashFindCollision` so a host-owned `/find` is never shadowed.
+ * 2. Otherwise register the source via `ctx.inputTriggers.registerSource`.
+ * 3. Cold start: when no session existed at apply time the probe could not
+ *    run, so a `sessions.list` watcher re-runs the verdict on every current-
+ *    session change and withdraws the registration while the active session's
+ *    catalog owns `find`. No catalog snapshot/cache is kept — each verdict
+ *    re-probes the live public contract.
  */
 export async function registerFindSource(options: RegisterFindSourceOptions): Promise<() => void> {
-  const collisions = await findHostFindCollisions(options.ctx)
-  if (collisions.length > 0) {
-    throw makeFindCollision(collisions)
+  const initialCollisions = await findHostFindCollisions(options.ctx)
+  if (initialCollisions.length > 0) {
+    throw makeFindCollision(initialCollisions)
   }
   const open = () => {
     const id = options.ctx.sessions?.list?.getSnapshot?.()?.current
@@ -194,11 +226,49 @@ export async function registerFindSource(options: RegisterFindSourceOptions): Pr
     // No slash pipeline in this host: no behavior change.
     return () => {}
   }
-  // Preserve `this` binding: registerSource uses `this.live` internally.
-  return options.ctx.effect(
-    () => registerSource.call(triggers, createFindSource(open, executeSelected, options.capability)),
-    'universal-palette: /find input trigger source',
-  )
+  let sourceDisposer: (() => void) | null = null
+  let disposed = false
+  let probing = false
+  const setRegistered = (registered: boolean) => {
+    if (disposed) return
+    if (registered && sourceDisposer === null) {
+      // Preserve `this` binding: registerSource uses `this.live` internally.
+      sourceDisposer = registerSource.call(triggers, createFindSource(open, executeSelected, options.capability))
+    } else if (!registered && sourceDisposer !== null) {
+      try { sourceDisposer() } catch { /* registration already gone */ }
+      sourceDisposer = null
+    }
+  }
+  setRegistered(true)
+  const list = options.ctx.sessions?.list
+  let offSessions: (() => void) | undefined
+  if (list && typeof list.subscribe === 'function') {
+    offSessions = list.subscribe(() => {
+      if (probing || disposed) return
+      probing = true
+      void findHostFindCollisions(options.ctx)
+        .then(collisions => {
+          probing = false
+          if (disposed) return
+          setRegistered(collisions.length === 0)
+        })
+        .catch(error => {
+          // Includes HostCatalogContractError: an unreadable catalog must
+          // fail closed (withdraw the claim) and stay loud.
+          probing = false
+          if (disposed) return
+          setRegistered(false)
+          // eslint-disable-next-line no-console
+          console.error('[dsh-universal-palette] /find collision probe failed:', error)
+        })
+    })
+  }
+  return options.ctx.effect(() => () => {
+    disposed = true
+    offSessions?.()
+    try { sourceDisposer?.() } catch { /* registration already gone */ }
+    sourceDisposer = null
+  }, 'universal-palette: /find input trigger source')
 }
 
 // Re-export so consumers / tests can pattern-match on the union shape.
