@@ -32,12 +32,11 @@ const cold = useSyncExternalStore(props.cold.subscribe, props.cold.getSnapshot)
     () => controller.getState(),
   )
   const [conflicts] = useState<readonly string[]>([])
-  const [error, setError] = useState('')
   const returnFocus = useRef<HTMLElement | null>(null)
-  const [view, setView] = useState(() => buildView(state, props, t))
+  const [view, setView] = useState(() => buildView(state, props, t, controller))
   useEffect(() => {
-    setView(buildView(state, props, t))
-  }, [state, props, t, locale])
+    setView(buildView(state, props, t, controller))
+  }, [state, props, t, locale, controller])
 
   // Sessions/workspaces refresh wiring. The keyboard listener is
   // registered once at apply time so it works before this body mounts.
@@ -68,25 +67,27 @@ const cold = useSyncExternalStore(props.cold.subscribe, props.cold.getSnapshot)
 
   if (state.presentation !== 'floating') return null
 
-  const displayError = error
-    ? localizedError(error, { ctx: props.ctx, hasSession: true, workspaces: [], t })
+  const displayError = state.error
+    ? localizedError(state.error, t)
     : (state.aggregator.failures.length ? t('providerFailed') : '')
   const runPrimary = async () => {
     const item = view.items[Math.min(state.selectedIndex, Math.max(0, view.items.length - 1))]?.item
     if (!item) return
+    controller.reportError(null)
     try {
       await props.preferences.recordUse(item.id)
       await item.primary.run(new AbortController().signal)
       if (item.primary.stayOpen !== true) controller.close()
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    } catch (e) { controller.reportError(e instanceof Error ? e.message : String(e)) }
   }
   const runSecondary = async (item: PaletteItem, action: PaletteAction) => {
+    controller.reportError(null)
     try {
       await props.preferences.recordUse(item.id)
       await action.run(new AbortController().signal)
       if (action.stayOpen !== true) controller.close()
       else controller.setActionPanelOpen(false)
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    } catch (e) { controller.reportError(e instanceof Error ? e.message : String(e)) }
   }
   return <div data-presentation="floating">
     <UniversalPalette
@@ -119,7 +120,12 @@ const cold = useSyncExternalStore(props.cold.subscribe, props.cold.getSnapshot)
   </div>
 }
 
-function buildView(state: SearchState, props: FloatingProps, t: (key: string, params?: Record<string, unknown>) => string) {
+function buildView(
+  state: SearchState,
+  props: FloatingProps,
+  t: (key: string, params?: Record<string, unknown>) => string,
+  controller: SearchController,
+) {
   const workspaces = props.ctx.workspaces.list.getSnapshot().items.map((w) => ({
     workspaceId: String(w.workspaceId),
     title: w.title,
@@ -130,6 +136,7 @@ function buildView(state: SearchState, props: FloatingProps, t: (key: string, pa
     hasSession: props.ctx.sessions.list.getSnapshot().current !== undefined,
     workspaces,
     t,
+    setMode: mode => controller.setMode(mode),
   })
   return view
 }

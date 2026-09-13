@@ -10,6 +10,7 @@
  * one `UniversalPalette` body and one shared SearchController state.
  */
 import type { ReactNode } from 'react'
+import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { PaletteItem } from '../shared/contract.ts'
 import type { SearchState } from './search-controller.ts'
 import type { RankedItem } from './ranking/rank.ts'
@@ -20,8 +21,13 @@ export interface SurfaceDriver {
   readonly hasSession: boolean
   readonly workspaces: ReadonlyArray<{ workspaceId: string; title: string; path: string }>
   readonly t: (key: string, params?: Record<string, unknown>) => string
-  /** Open the active Session's morph through the controller; no-op for Floating. */
-  readonly openMorph?: (sessionId: string) => void
+  /**
+   * Navigate the surface into one of the reserved modes. Required so every
+   * startup row that promises navigation is really executable — the
+   * historical `() => undefined` wiring left "Select workspace" (with
+   * existing workspaces) and "Recent sessions" as dead rows.
+   */
+  readonly setMode: (mode: 'workspaces' | 'sessions') => void
 }
 
 export interface PreparedView {
@@ -60,8 +66,8 @@ export function prepareView(state: SearchState, driver: SurfaceDriver): Prepared
     if (!driver.hasSession) {
       const startup = createStartupItems(
         driver.ctx,
-        () => undefined,
-        () => undefined,
+        () => driver.setMode('workspaces'),
+        () => driver.setMode('sessions'),
         driver.t,
       )
       visible = [...startup.map(asRanked), ...base]
@@ -113,7 +119,11 @@ function workspaceItem(
       id: 'open-workspace',
       title: 'Open',
       run: async () => {
-        driver.openMorph?.(w.workspaceId)
+        // Official workspace flow: resolve the reusable/new Session for the
+        // workspace, then open it. The workspaceId is never used as a
+        // sessionId (the historical openMorph(workspaceId) did exactly that).
+        const sessionId = await driver.ctx.uiWorkspace.connectWorkspace(w.workspaceId as WorkspaceId)
+        driver.ctx.sessions.open(sessionId)
       },
     },
   }
@@ -121,10 +131,10 @@ function workspaceItem(
 
 export function localizedError(
   reason: unknown,
-  driver: SurfaceDriver,
+  t: (key: string, params?: Record<string, unknown>) => string,
 ): string {
   const message = reason instanceof Error ? reason.message : String(reason)
-  return message.startsWith('Feedback text is required') ? driver.t('feedbackRequired') : message
+  return message.startsWith('Feedback text is required') ? t('feedbackRequired') : message
 }
 
 export function noopNode(): ReactNode { return null }

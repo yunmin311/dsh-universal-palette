@@ -41,6 +41,10 @@ export interface SearchState {
   readonly actionPanelSelectedIndex: number
   readonly generation: number
   readonly hasAggregator: boolean
+  /** Last action-error message; cleared on close/reopen/mode switch and on
+   *  an effective draft change so a failed action can never permanently
+   *  pollute later opens (null = no action error). */
+  readonly error: string | null
 }
 
 /** Inputs the controller wraps; passed in once at construction. */
@@ -86,6 +90,7 @@ export class SearchController {
       actionPanelSelectedIndex: 0,
       generation: 0,
       hasAggregator: true,
+      error: null,
     }
     this.aggregatorUnsub = deps.aggregator.subscribe((next) => {
       // Aggregator seq and presentation generation are independent clocks.
@@ -124,6 +129,7 @@ export class SearchController {
       actionPanelOpen: false,
       actionPanelSelectedIndex: 0,
       generation: this.state.generation + 1,
+      error: null,
     }
     this.commit(next)
     this.deps.aggregator.setQuery(next.draft)
@@ -163,6 +169,7 @@ export class SearchController {
       actionPanelOpen: false,
       actionPanelSelectedIndex: 0,
       generation: this.state.generation + 1,
+      error: null,
     }
     this.commit(next)
     this.deps.aggregator.setQuery(next.draft)
@@ -177,6 +184,7 @@ export class SearchController {
       sessionId: next === 'floating' ? null : sessionId,
       composerEntry: next === 'floating' ? null : this.state.composerEntry ?? 'direct',
       generation: this.state.generation + 1,
+      error: null,
     }
     this.commit(state)
   }
@@ -191,20 +199,21 @@ export class SearchController {
       sessionId: null,
       composerEntry: null,
       generation: this.state.generation + 1,
+      error: null,
     }
     this.commit(next)
   }
 
   setDraft(text: string): void {
     if (this.state.draft === text) return
-    this.state = { ...this.state, draft: text }
+    this.state = { ...this.state, draft: text, error: null }
     this.emit()
     this.deps.aggregator.setQuery(text)
   }
 
   setMode(mode: SurfaceMode): void {
     if (this.state.mode === mode) return
-    this.state = { ...this.state, mode, draft: '', selectedIndex: 0 }
+    this.state = { ...this.state, mode, draft: '', selectedIndex: 0, error: null }
     this.emit()
     void this.deps.aggregator.setQueryImmediate('')
   }
@@ -224,6 +233,18 @@ export class SearchController {
   setActionPanelIndex(index: number): void {
     if (this.state.actionPanelSelectedIndex === index) return
     this.state = { ...this.state, actionPanelSelectedIndex: index }
+    this.emit()
+  }
+
+  /**
+   * Report the last action-run outcome. Surfaces call this with `null`
+   * before every run attempt and with the failure message in their catch
+   * path; commit paths (open/close/switch/mode/draft) clear it so a stale
+   * action error can never outlive the interaction that produced it.
+   */
+  reportError(message: string | null): void {
+    if (this.state.error === message) return
+    this.state = { ...this.state, error: message }
     this.emit()
   }
 

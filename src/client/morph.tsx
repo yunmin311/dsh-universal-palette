@@ -7,7 +7,7 @@
  * Active positioning reuses DSH MenuView's public popup pattern
  * (position: absolute; bottom: calc(100% + 4px)).
  */
-import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useSyncExternalStore } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { InputActions, InputState } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -68,7 +68,6 @@ export function Morph(props: MorphProps) {
   )
   const composerDraft = props.useInput(input => input.draft)
   const composer = composerSearchQuery(composerDraft)
-  const [error, setError] = useState('')
   const view = useMemo(() => buildView(state, t, locale.active.startsWith('zh')), [locale, state, t])
 
   // The public Composer draft is the only query source. Slash mode ends as
@@ -97,6 +96,7 @@ export function Morph(props: MorphProps) {
   const runAt = async (index: number) => {
     const item = view.items[Math.min(index, Math.max(0, view.items.length - 1))]?.item
     if (!item) return
+    props.controller.reportError(null)
     try {
       if (state.composerEntry === 'slash' && composer.slashMode) {
         props.inputActions.setDraft(composer.query)
@@ -104,7 +104,7 @@ export function Morph(props: MorphProps) {
       await props.preferences.recordUse(item.id)
       await item.primary.run(new AbortController().signal)
       if (item.primary.stayOpen !== true) props.controller.close()
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    } catch (e) { props.controller.reportError(e instanceof Error ? e.message : String(e)) }
   }
 
   // Composer keeps focus. Capture navigation for the result-only direct mode;
@@ -139,8 +139,8 @@ export function Morph(props: MorphProps) {
   if (state.sessionId !== props.sessionId) return null
   if (props.placement === 'active-up' && heroSeatMounted) return null
   if (props.placement === 'active-up' && overlaySuppressed) return null
-  const displayError = error
-    ? localizedError(error, { ctx: props.ctx, hasSession: true, workspaces: [], t })
+  const displayError = state.error
+    ? localizedError(state.error, t)
     : (state.aggregator.failures.length ? t('providerFailed') : '')
   return <MorphResults
     placement={props.placement}
