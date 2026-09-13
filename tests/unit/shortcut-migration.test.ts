@@ -1,65 +1,142 @@
-/**
- * Shortcut migration tests.
- *
- *  - empty storage: pick platform default;
- *  - non-empty storage (any non-empty value, including Ctrl+Shift+K): keep
- *    verbatim;
- *  - empty string: treat as missing — pick platform default;
- *  - platform-default lookup must agree with the index.ts fallback path,
- *    so a host that migrates from no-storage to defaultShortcut gets the
- *    same string the index.ts path would supply.
- */
-import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { defaultShortcut } from '../../src/client/shortcut.ts'
+import { test } from 'node:test'
 import { bridgeKeysActions } from '../../src/client/keysActions.ts'
+import {
+  PreferencesStore,
+  type PalettePreferences,
+  type PreferencesBackend,
+} from '../../src/client/state/preferences.ts'
 
-function migrate(stored: string | undefined, platform: NodeJS.Platform): string {
-  return typeof stored === 'string' && stored.trim().length > 0 ? stored : defaultShortcut(platform)
+const LEGACY_DEFAULTS: PalettePreferences = {
+  pins: {},
+  frecency: {},
+  glassIntensity: 'soft',
+  shortcut: 'Ctrl+Shift+K',
 }
 
-test('stored Ctrl+Shift+K is kept verbatim on every platform', () => {
-  assert.equal(migrate('Ctrl+Shift+K', 'win32'), 'Ctrl+Shift+K')
-  assert.equal(migrate('Ctrl+Shift+K', 'linux'), 'Ctrl+Shift+K')
-  assert.equal(migrate('Ctrl+Shift+K', 'darwin'), 'Ctrl+Shift+K')
+function memoryBackend(initial: unknown = null): {
+  backend: PreferencesBackend
+  read: () => unknown
+} {
+  let stored = structuredClone(initial)
+  return {
+    backend: {
+      async load() {
+        return structuredClone(stored) as PalettePreferences | null
+      },
+      async save(preferences) {
+        stored = structuredClone(preferences)
+      },
+    },
+    read: () => structuredClone(stored),
+  }
+}
+
+async function reload(
+  backend: PreferencesBackend,
+  platformDefault: string,
+): Promise<PreferencesStore> {
+  const store = new PreferencesStore(backend, platformDefault)
+  await store.load()
+  return store
+}
+
+test('Windows fresh snapshot starts with Alt+Q', () => {
+  const { backend } = memoryBackend()
+  const store = new PreferencesStore(backend, 'Alt+Q')
+  assert.equal(store.snapshot.shortcut, 'Alt+Q')
 })
 
-test('stored custom value is kept verbatim', () => {
-  assert.equal(migrate('Ctrl+Alt+P', 'win32'), 'Ctrl+Alt+P')
-  assert.equal(migrate('Alt+Space', 'darwin'), 'Alt+Space')
+test('Windows fresh persist and reload keeps Alt+Q', async () => {
+  const memory = memoryBackend()
+  const first = await reload(memory.backend, 'Alt+Q')
+
+  await first.recordUse('command:/goal')
+  assert.deepEqual(memory.read(), {
+    schemaVersion: 1,
+    shortcutCustomized: false,
+    pins: {},
+    frecency: {
+      'command:/goal': {
+        count: 1,
+        lastUsedAt: first.snapshot.frecency['command:/goal']!.lastUsedAt,
+      },
+    },
+    glassIntensity: 'soft',
+    shortcut: 'Alt+Q',
+  })
+
+  const second = await reload(memory.backend, 'Alt+Q')
+  assert.equal(second.snapshot.shortcut, 'Alt+Q')
 })
 
-test('missing storage falls back to platform default (Windows)', () => {
-  assert.equal(migrate(undefined, 'win32'), 'Alt+Q')
+test('macOS fresh snapshot starts with Cmd+Shift+K', () => {
+  const { backend } = memoryBackend()
+  const store = new PreferencesStore(backend, 'Cmd+Shift+K')
+  assert.equal(store.snapshot.shortcut, 'Cmd+Shift+K')
 })
 
-test('missing storage falls back to platform default (Linux)', () => {
-  assert.equal(migrate(undefined, 'linux'), 'Alt+Q')
+test('macOS fresh persist and reload keeps Cmd+Shift+K', async () => {
+  const memory = memoryBackend()
+  const first = await reload(memory.backend, 'Cmd+Shift+K')
+  await first.recordUse('command:/goal')
+
+  const second = await reload(memory.backend, 'Cmd+Shift+K')
+  assert.equal(second.snapshot.shortcut, 'Cmd+Shift+K')
+  assert.equal((memory.read() as { shortcutCustomized: boolean }).shortcutCustomized, false)
 })
 
-test('missing storage falls back to platform default (macOS)', () => {
-  assert.equal(migrate(undefined, 'darwin'), 'Cmd+Shift+K')
+test('new-schema explicit custom shortcut survives persistence and reload', async () => {
+  const memory = memoryBackend({
+    schemaVersion: 1,
+    shortcutCustomized: true,
+    ...LEGACY_DEFAULTS,
+    shortcut: 'Ctrl+Alt+P',
+  })
+  const first = await reload(memory.backend, 'Alt+Q')
+  await first.recordUse('command:/goal')
+
+  const second = await reload(memory.backend, 'Alt+Q')
+  assert.equal(second.snapshot.shortcut, 'Ctrl+Alt+P')
+  assert.equal((memory.read() as { shortcutCustomized: boolean }).shortcutCustomized, true)
 })
 
-test('empty string falls back to platform default', () => {
-  assert.equal(migrate('', 'win32'), 'Alt+Q')
-  assert.equal(migrate('', 'darwin'), 'Cmd+Shift+K')
+test('legacy Ctrl+Shift+K migrates to the platform default', async () => {
+  const windows = await reload(memoryBackend(LEGACY_DEFAULTS).backend, 'Alt+Q')
+  const mac = await reload(memoryBackend(LEGACY_DEFAULTS).backend, 'Cmd+Shift+K')
+
+  assert.equal(windows.snapshot.shortcut, 'Alt+Q')
+  assert.equal(mac.snapshot.shortcut, 'Cmd+Shift+K')
 })
 
-test('whitespace-only storage falls back to platform default', () => {
-  assert.equal(migrate('   ', 'linux'), 'Alt+Q')
+test('legacy non-default shortcut is treated as explicit customization', async () => {
+  const memory = memoryBackend({ ...LEGACY_DEFAULTS, shortcut: 'Ctrl+Alt+P' })
+  const first = await reload(memory.backend, 'Alt+Q')
+  await first.togglePin('command:/goal')
+
+  const second = await reload(memory.backend, 'Alt+Q')
+  assert.equal(second.snapshot.shortcut, 'Ctrl+Alt+P')
+  assert.equal((memory.read() as { shortcutCustomized: boolean }).shortcutCustomized, true)
+})
+
+test('frecency and pin persistence never replace the effective shortcut', async () => {
+  const memory = memoryBackend()
+  const first = await reload(memory.backend, 'Alt+Q')
+  await first.recordUse('command:/goal')
+  await first.togglePin('command:/goal')
+
+  assert.equal(first.snapshot.shortcut, 'Alt+Q')
+  const second = await reload(memory.backend, 'Alt+Q')
+  assert.equal(second.snapshot.shortcut, 'Alt+Q')
+  assert.equal(second.snapshot.frecency['command:/goal']?.count, 1)
+  assert.ok(second.snapshot.pins['command:/goal'])
 })
 
 test('keys.actions bridge missing => no behavior change', () => {
-  // Bridge is a no-op when ctx.get('keys.actions') is missing; verified by
-  // asserting the helper still returns a disposer without throwing.
   const ctxWithoutKeys = { get: () => undefined, on: () => () => undefined }
-  let disposed = false
-  bridgeKeysActions(ctxWithoutKeys, {
+  assert.doesNotThrow(() => bridgeKeysActions(ctxWithoutKeys, {
     label: () => 'Open Universal Palette',
     description: () => 'Search commands, sessions, models, and history',
     toggle: () => undefined,
-  })
-  disposed = true
-  assert.equal(disposed, true)
+  }))
 })

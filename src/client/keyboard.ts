@@ -2,10 +2,10 @@
  * Global keyboard handler.
  *
  * Captures `keydown` at the capture phase so we beat the input
- * element. Default shortcut is `Ctrl/Cmd+Shift+K` — deliberately
- * off `Ctrl/Cmd+K` (taken by `dsh-spotlight`) and `Alt+M` (taken
- * by `dsh-model-palette`). On known-conflict we surface a notice
- * in the palette surface; we never silently override.
+ * element. The platform default is supplied by PreferencesStore and stays
+ * off `Ctrl/Cmd+K` (taken by `dsh-spotlight`) and `Alt+M` (taken by
+ * `dsh-model-palette`). On known-conflict we surface a notice in the palette
+ * surface; we never silently override.
  */
 
 export interface ShortcutReport {

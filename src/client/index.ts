@@ -100,19 +100,6 @@ function detectBrowserPlatform(): NodeJS.Platform {
   return /Mac|iPhone|iPad/i.test(ua) ? 'darwin' : 'win32'
 }
 
-/**
- * Migrate the stored shortcut value. Prompt §6: existing storage values
- * (including `Ctrl+Shift+K`) are preserved verbatim; a fresh install that
- * never wrote a preference falls back to the platform default. The
- * PreferencesStore reports `hasSavedValue()` to distinguish the two.
- */
-function migrateShortcut(stored: unknown): string {
-  if (typeof stored !== 'string' || stored.trim().length === 0) {
-    return defaultShortcut(detectBrowserPlatform())
-  }
-  return stored
-}
-
 interface SearchButtonSlotProps {
   readonly ctx: Context
   readonly controller: SearchController
@@ -136,7 +123,10 @@ export function apply(ctx: Context): void {
 
 function applyInternal(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'universal-palette: dictionaries')
-  const preferences = new PreferencesStore(createLocalStorageBackend())
+  const preferences = new PreferencesStore(
+    createLocalStorageBackend(),
+    defaultShortcut(detectBrowserPlatform()),
+  )
   void preferences.load()
   const aggregator = new PaletteAggregator({
     providers: [
@@ -213,11 +203,9 @@ function applyInternal(ctx: Context): void {
   // time, so it works before the Floating surface body mounts. The
   // listener dispatches into the shared controller, so the Floating
   // wrapper and the Keys Palette bridge share the same presentation
-  // state. Migration rules live in `shortcut.ts`; storage value wins,
-  // empty storage falls back to platform default.
-  const activeShortcut = preferences.hasSavedValue()
-    ? migrateShortcut(preferences.snapshot.shortcut)
-    : defaultShortcut(detectBrowserPlatform())
+  // state. PreferencesStore owns migration and persistence, so its snapshot
+  // is the single effective shortcut source from the moment it is created.
+  let activeShortcut = preferences.snapshot.shortcut
   const keyboard = attachKeyboard({
     shortcut: activeShortcut,
     isOpen: () => controller.getState().presentation === 'floating',
@@ -235,9 +223,7 @@ function applyInternal(ctx: Context): void {
   // keyboard listener with the migrated value. The listener is the same
   // function identity across changes; we dispose and replace it.
   ctx.effect(() => preferences.subscribe(() => {
-    const nextActive = preferences.hasSavedValue()
-      ? migrateShortcut(preferences.snapshot.shortcut)
-      : defaultShortcut(detectBrowserPlatform())
+    const nextActive = preferences.snapshot.shortcut
     if (nextActive === activeShortcut) return
     keyboard.dispose()
     const replacement = attachKeyboard({
@@ -251,6 +237,7 @@ function applyInternal(ctx: Context): void {
         console.warn('[dsh-universal-palette] shortcut conflict:', report)
       },
     })
+    activeShortcut = nextActive
     ;(keyboard as { dispose: () => void }).dispose = replacement.dispose.bind(replacement)
   }), 'universal-palette: shortcut migration watcher')
 

@@ -13,20 +13,27 @@ export interface PalettePreferences {
   readonly shortcut: string
 }
 
-export const DEFAULT_PREFERENCES: PalettePreferences = {
+const BASE_PREFERENCES = {
   pins: {},
   frecency: {},
   glassIntensity: 'soft',
-  shortcut: 'Ctrl+Shift+K',
+} as const
+
+const PREFERENCES_SCHEMA_VERSION = 1
+const LEGACY_DEFAULT_SHORTCUT = 'Ctrl+Shift+K'
+
+export type StoredPalettePreferences = Partial<PalettePreferences> & {
+  readonly schemaVersion?: number
+  readonly shortcutCustomized?: boolean
 }
 
 export interface PreferencesBackend {
   /** Load the persisted shape, or `null` when the backend has never
-   *  written anything yet. Returning a fully-formed DEFAULT_PREFERENCES
-   *  would force the migration layer to read a "default" that the user
-   *  never chose; null preserves the fresh-install branch. */
-  load(): Promise<PalettePreferences | null>
-  save(prefs: PalettePreferences): Promise<void>
+   *  written anything yet. Returning a synthesized runtime preference
+   *  would force migration to read a "default" the user never chose;
+   *  null preserves the fresh-install branch. */
+  load(): Promise<StoredPalettePreferences | null>
+  save(prefs: StoredPalettePreferences): Promise<void>
 }
 
 const STORAGE_KEY = 'dsh-universal-palette/preferences'
@@ -45,30 +52,23 @@ export function frecencyScore(
 
 export class PreferencesStore {
   private readonly backend: PreferencesBackend
-  private current: PalettePreferences = DEFAULT_PREFERENCES
+  private readonly platformDefaultShortcut: string
+  private current: PalettePreferences
+  private shortcutCustomized = false
   private listeners = new Set<() => void>()
-  /** Tracks whether the storage backend has ever returned a saved value;
-   *  a `false` value here means the running PreferencesStore is still on
-   *  DEFAULT_PREFERENCES, so the migration layer can decide whether to
-   *  honor an "existing Ctrl+Shift+K" (Prompt §6) or to fall back to the
-   *  platform default for a fresh install. */
-  private backendHasSavedValue = false
 
-  constructor(backend: PreferencesBackend) {
+  constructor(backend: PreferencesBackend, platformDefaultShortcut: string) {
     this.backend = backend
+    this.platformDefaultShortcut = platformDefaultShortcut
+    this.current = { ...BASE_PREFERENCES, shortcut: platformDefaultShortcut }
   }
 
   async load(): Promise<void> {
     const loaded = await this.backend.load()
-    this.backendHasSavedValue = loaded !== null
-    this.current = loaded ?? DEFAULT_PREFERENCES
+    const normalized = normalizeStoredPreferences(loaded, this.platformDefaultShortcut)
+    this.current = normalized.preferences
+    this.shortcutCustomized = normalized.shortcutCustomized
     this.notify()
-  }
-
-  /** True once the storage backend has confirmed a saved value (a fresh
-   *  install that never wrote anything reports `false`). */
-  hasSavedValue(): boolean {
-    return this.backendHasSavedValue
   }
 
   get snapshot(): PalettePreferences {
@@ -118,12 +118,51 @@ export class PreferencesStore {
   }
 
   private async persist(): Promise<void> {
-    await this.backend.save(this.current)
+    await this.backend.save({
+      schemaVersion: PREFERENCES_SCHEMA_VERSION,
+      shortcutCustomized: this.shortcutCustomized,
+      ...this.current,
+    })
     this.notify()
   }
 
   private notify(): void {
     for (const l of this.listeners) l()
+  }
+}
+
+function normalizeStoredPreferences(
+  stored: StoredPalettePreferences | null,
+  platformDefaultShortcut: string,
+): { preferences: PalettePreferences; shortcutCustomized: boolean } {
+  const storedShortcut = typeof stored?.shortcut === 'string' && stored.shortcut.trim().length > 0
+    ? stored.shortcut
+    : undefined
+  const hasCurrentMetadata = stored?.schemaVersion === PREFERENCES_SCHEMA_VERSION
+    && typeof stored.shortcutCustomized === 'boolean'
+
+  // The legacy schema cannot distinguish its automatic Ctrl+Shift+K default
+  // from a user who deliberately chose the same value. Before v0.2 is
+  // published, migrate that ambiguous value as the legacy default. Every
+  // other non-empty legacy value is treated as an explicit customization.
+  const shortcutCustomized = hasCurrentMetadata
+    ? stored.shortcutCustomized === true && storedShortcut !== undefined
+    : storedShortcut !== undefined && storedShortcut !== LEGACY_DEFAULT_SHORTCUT
+  const shortcut = shortcutCustomized ? storedShortcut! : platformDefaultShortcut
+  const glassIntensity = stored?.glassIntensity === 'solid'
+    || stored?.glassIntensity === 'glass'
+    || stored?.glassIntensity === 'soft'
+    ? stored.glassIntensity
+    : BASE_PREFERENCES.glassIntensity
+
+  return {
+    preferences: {
+      pins: stored?.pins ?? {},
+      frecency: stored?.frecency ?? {},
+      glassIntensity,
+      shortcut,
+    },
+    shortcutCustomized,
   }
 }
 
@@ -134,8 +173,7 @@ export function createLocalStorageBackend(): PreferencesBackend {
       try {
         const raw = localStorage.getItem(STORAGE_KEY)
         if (!raw) return null
-        const parsed = JSON.parse(raw) as Partial<PalettePreferences>
-        return { ...DEFAULT_PREFERENCES, ...parsed }
+        return JSON.parse(raw) as StoredPalettePreferences
       } catch {
         return null
       }
