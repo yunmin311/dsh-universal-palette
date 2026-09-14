@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/@yunmin311/dsh-universal-palette.svg)](https://www.npmjs.com/package/@yunmin311/dsh-universal-palette)
 [![GitHub release](https://img.shields.io/github/v/release/yunmin311/dsh-universal-palette.svg)](https://github.com/yunmin311/dsh-universal-palette/releases)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![DSH](https://img.shields.io/badge/DSH-0.1.2--rc.1-2962ff.svg)](docs/COMPATIBILITY.md)
+[![DSH](https://img.shields.io/badge/DSH-0.1.2--rc.1%2C%200.1.5--rc.1-2962ff.svg)](docs/COMPATIBILITY.md)
 [![node](https://img.shields.io/node/v/%40yunmin311/dsh-universal-palette.svg)](package.json)
 [![CI](https://github.com/yunmin311/dsh-universal-palette/actions/workflows/ci.yml/badge.svg)](https://github.com/yunmin311/dsh-universal-palette/actions/workflows/ci.yml)
 
@@ -34,7 +34,7 @@ Universal Palette 为同一个搜索控制器提供两种呈现：有上下文�
 ## 快速开始
 
 ```powershell
-dsh plugin --profile web add @yunmin311/dsh-universal-palette@0.2.0
+dsh plugin --profile web add @yunmin311/dsh-universal-palette@0.2.1
 dsh --profile web
 ```
 
@@ -120,11 +120,36 @@ Universal Palette 目前没有 Provider SDK，也没有相关计划。推荐的�
 
 ## 兼容性
 
-验证并锁定于 `@deepseek-ai/dsh@0.1.2-rc.1`（`deepseek-ai/deepseek-harness@76fda729799fe9b3848dbe2c211d4b231032b81e`）。其他 DSH 版本未经验证。详见 [COMPATIBILITY.md](docs/COMPATIBILITY.md) 与 [COMMAND_COMPATIBILITY.md](docs/COMMAND_COMPATIBILITY.md)。
+已验证：
+- `@deepseek-ai/dsh@0.1.2-rc.1`（baseline，`deepseek-ai/deepseek-harness@76fda729799fe9b3848dbe2c211d4b231032b81e`）
+- `@deepseek-ai/dsh@0.1.5-rc.1`（API drift 已验证；仅兼容 seam）
 
-在锁定的 DSH `0.1.2-rc.1` Hero 界面中，会话级 Composer Morph outlet 不会挂载，且官方 `0.1.2-rc.1` 并不暴露 `conversation.hero.composer.dock` 席位。因此 Composer Search 在 Hero 页面**直接 fail closed**：Search 按钮禁用、原生 slash 菜单不展示 `/find` candidate；手工输入的 `/find …` 仍会被 claim，但 Enter 后返回本地化的 capability 错误——既不会把内容提交给 Agent，也绝不会向上回退成 Morph。活动会话的 Composer Search 与全局悬浮面板（`Alt+Q`）不受影响。
+其他 DSH 版本未验证。详见 [COMPATIBILITY.md](docs/COMPATIBILITY.md) 与 [COMMAND_COMPATIBILITY.md](docs/COMMAND_COMPATIBILITY.md)。
 
-Hero 向下呈现仅在声明了 `conversation.hero.composer.dock` 的宿主上启用。当前完整验证的宿主是维护者自己的增强 fork（`yunmin311/deepseek-harness`，分支 `feat/hero-composer-dock`）；这不是 upstream 支持——该 fork 将作为完整 Hero 体验的长期增强宿主进行维护。
+### 0.1.5-rc.1 API drift（不影响 Universal Palette）
+
+Palette 仅消费以下公开 Client seam；这些在 0.1.2-rc.1 与 0.1.5-rc.1 之间**兼容**：
+
+- `ctx.remote.commands.list` — 形状不变
+- `ctx.sessions.list / binding / search / open` — 形状不变
+- `ctx.workspaces.list / create` — 不变
+- `ctx.modelDirectories.directoryFor / load / select` — 不变
+- `ctx.inputTriggers.registerSource / sessionOf / adjudicate` — envelope 字段 `images`→`attachments` 重命名（Palette 不提交 images）
+- `ctx.slots.spec / subscribe / inject / register` — `shell.overlay`、`conversation.input.left`、`conversation.input.overlay`、`conversation.hero.composer.dock`、`conversation.composer.dock`、`sidebar.footer.action` 名称不变
+- `locale`、`plugin lifecycle` — 不变
+
+0.1.5 的破坏性变更（如 `commands.execute` 第 3 参数 `images`→`attachments`、session 格式 V3、wire `seedLength`→`isSeeded`、history events 重组）均**不与 Palette 调用面相交**。
+
+### Hero 页面
+
+- Stock `0.1.2-rc.1` / `0.1.5-rc.1`：无 `conversation.hero.composer.dock` → Composer Search **直接 fail closed**（Search 按钮禁用并给出原因；`/find` 被 claim 但返回 capability 错误；绝不向上回退）。
+- 增强 Hero 体验（向下 Morph）要求宿主声明 `conversation.hero.composer.dock`。已完整验证的宿主是维护者自己的增强 fork（`yunmin311/deepseek-harness`，分支 `feat/hero-composer-dock`，SHA `321bf88d10e0176674226d02de59d3e0bd79579d`）。这**不是 upstream 支持**；该 fork 将作为完整 Hero 体验的长期增强宿主维护。
+
+### Desktop
+
+- 当前无官方 DeepSeek Desktop 安装包发布。上游仓库包含 Desktop 打包基础设施（`apps/desktop` Electron shell + `apps/desktop-host`），但 `https://download.deepseek.com/_/harness/desktop/stable/...` 无安装包（审查时 404）。
+- 社区封装（Electron/Tauri/Wails shell 打包 stock `dsh web`）存在但**不在 verified matrix**。
+- `deepseekagent.io` / 第三方站点**非官方 DeepSeek 产品**。
 
 ## 隐私与安全
 
