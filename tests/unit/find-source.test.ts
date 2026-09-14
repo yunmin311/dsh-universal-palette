@@ -123,7 +123,7 @@ test('Hero /find enters the same persistent claim as active Composer search', as
 // These tests intentionally shape the mock after that contract, not after
 // the implementation's historical `{ value: { items } }` misreading.
 
-test('Host command catalog collision returns find name (real rc1 array shape)', async () => {
+test('Host exact find denies /find (real rc1 array shape)', async () => {
   const ctx = {
     sessions: { list: { getSnapshot: () => ({ current: 's1' }) } },
     remote: {
@@ -132,8 +132,45 @@ test('Host command catalog collision returns find name (real rc1 array shape)', 
       },
     },
   } as never
-  const collisions = await findHostFindCollisions(ctx)
-  assert.deepEqual([...collisions], ['find'])
+  const verdict = await findHostFindCollisions(ctx)
+  assert.equal(verdict.kind, 'deny')
+  assert.equal(verdict.kind === 'deny' && verdict.reason, 'host-collision')
+  assert.deepEqual(verdict.kind === 'deny' ? [...verdict.collisions] : [], ['find'])
+})
+
+test('Near-miss names do not collide: only exact find denies', async () => {
+  const ctx = {
+    sessions: { list: { getSnapshot: () => ({ current: 's1' }) } },
+    remote: {
+      commands: {
+        list: async () => ({
+          ok: true,
+          value: [{ name: 'Find' }, { name: 'find-all' }, { name: 'my-find' }, { name: 'help' }],
+        }),
+      },
+    },
+  } as never
+  const verdict = await findHostFindCollisions(ctx)
+  assert.deepEqual(verdict, { kind: 'allow', coldStart: false })
+})
+
+test('Missing commands.list denies (unknown catalog state)', async () => {
+  const ctx = {
+    sessions: { list: { getSnapshot: () => ({ current: 's1' }) } },
+    remote: { commands: {} },
+  } as never
+  const verdict = await findHostFindCollisions(ctx)
+  assert.equal(verdict.kind, 'deny')
+  assert.equal(verdict.kind === 'deny' && verdict.reason, 'catalog-unavailable')
+})
+
+test('No current session allows cold start (no session-scoped catalog exists yet)', async () => {
+  const ctx = {
+    sessions: { list: { getSnapshot: () => ({ current: undefined }) } },
+    remote: { commands: { list: async () => ({ ok: true, value: [] }) } },
+  } as never
+  const verdict = await findHostFindCollisions(ctx)
+  assert.deepEqual(verdict, { kind: 'allow', coldStart: true })
 })
 
 test('PublicSlashFindCollision carries the host-side name', () => {
@@ -142,30 +179,53 @@ test('PublicSlashFindCollision carries the host-side name', () => {
   assert.match(err.message, /Host command catalog/)
 })
 
-test('Empty host catalog returns no collisions (real rc1 array shape)', async () => {
+test('Empty valid host catalog allows /find (real rc1 array shape)', async () => {
   const ctx = {
     sessions: { list: { getSnapshot: () => ({ current: 's1' }) } },
     remote: { commands: { list: async () => ({ ok: true, value: [] }) } },
   } as never
-  const collisions = await findHostFindCollisions(ctx)
-  assert.equal(collisions.length, 0)
+  const verdict = await findHostFindCollisions(ctx)
+  assert.deepEqual(verdict, { kind: 'allow', coldStart: false })
 })
 
-test('Host catalog unavailable (ok:false) returns no collisions and does not throw', async () => {
+test('ok:true with value:undefined fails closed (cannot prove the catalog lacks find)', async () => {
+  const ctx = {
+    sessions: { list: { getSnapshot: () => ({ current: 's1' }) } },
+    remote: { commands: { list: async () => ({ ok: true, value: undefined }) } },
+  } as never
+  const verdict = await findHostFindCollisions(ctx)
+  assert.equal(verdict.kind, 'deny')
+  assert.equal(verdict.reason, 'catalog-contract')
+})
+
+test('Host catalog unavailable (ok:false) fails closed', async () => {
   const ctx = {
     sessions: { list: { getSnapshot: () => ({ current: 's1' }) } },
     remote: { commands: { list: async () => ({ ok: false, error: { code: 'X', message: 'down' } }) } },
   } as never
-  const collisions = await findHostFindCollisions(ctx)
-  assert.equal(collisions.length, 0)
+  const verdict = await findHostFindCollisions(ctx)
+  assert.equal(verdict.kind, 'deny')
+  assert.equal(verdict.reason, 'catalog-unavailable')
 })
 
-test('Host catalog success with a non-array value fails closed instead of claiming /find', async () => {
+test('Host catalog success with a malformed value fails closed instead of claiming /find', async () => {
   const ctx = {
     sessions: { list: { getSnapshot: () => ({ current: 's1' }) } },
     remote: { commands: { list: async () => ({ ok: true, value: { items: [{ name: 'find' }] } }) } },
   } as never
-  await assert.rejects(() => findHostFindCollisions(ctx), /unexpected shape/i)
+  const verdict = await findHostFindCollisions(ctx)
+  assert.equal(verdict.kind, 'deny')
+  assert.equal(verdict.reason, 'catalog-contract')
+})
+
+test('A rejected catalog probe fails closed instead of claiming /find', async () => {
+  const ctx = {
+    sessions: { list: { getSnapshot: () => ({ current: 's1' }) } },
+    remote: { commands: { list: async () => { throw new Error('transport down') } } },
+  } as never
+  const verdict = await findHostFindCollisions(ctx)
+  assert.equal(verdict.kind, 'deny')
+  assert.equal(verdict.reason, 'catalog-unavailable')
 })
 
 // ---------------------------------------------------------------------------
@@ -185,6 +245,10 @@ function makeRegistrationCtx(overrides: Partial<FindSourceCtx> = {}) {
   let catalog: readonly { name: string; description: string }[] = [{ name: 'help', description: 'Help' }]
   const registered: unknown[] = []
   let unregisterCount = 0
+  // Optional per-call override: queued outcomes for consecutive list() calls
+  // (an outcome may be a result object, an Error to reject, or undefined to
+  // fall through to the catalog default).
+  const listOutcomes: Array<{ ok: boolean; value?: unknown } | Error | undefined> = []
   const ctx: FindSourceCtx = {
     sessions: {
       list: {
@@ -192,7 +256,16 @@ function makeRegistrationCtx(overrides: Partial<FindSourceCtx> = {}) {
         subscribe: fn => { sessionListeners.add(fn); return () => { sessionListeners.delete(fn) } },
       },
     },
-    remote: { commands: { list: async () => ({ ok: true, value: catalog }) } },
+    remote: {
+      commands: {
+        list: async () => {
+          const outcome = listOutcomes.shift()
+          if (outcome instanceof Error) throw outcome
+          if (outcome !== undefined) return outcome as { ok: boolean; value?: unknown }
+          return { ok: true, value: catalog }
+        },
+      },
+    },
     inputTriggers: {
       registerSource: src => {
         registered.push(src)
@@ -211,6 +284,7 @@ function makeRegistrationCtx(overrides: Partial<FindSourceCtx> = {}) {
     get unregisterCount() { return unregisterCount },
     setCurrent(next: string | undefined) { current = next },
     setCatalog(next: readonly { name: string; description: string }[]) { catalog = next },
+    queueListOutcome(outcome: { ok: boolean; value?: unknown } | Error | undefined) { listOutcomes.push(outcome) },
     emitSessionChange() { for (const fn of [...sessionListeners]) fn() },
   }
 }
@@ -402,5 +476,115 @@ test('rapid session changes: the newest session verdict wins even if an older pr
   await new Promise(resolve => setTimeout(resolve, 10))
   assert.equal(unregisterCount, 1, 'stale session A verdict ignored')
   assert.equal(registered.length, 1, 'no duplicate registration from stale probes')
+  disposer()
+})
+
+// ---------------------------------------------------------------------------
+// Gate 1 (release): /find registration is fail-closed. Only a successful,
+// contract-valid catalog that provably lacks `find` may keep the claim;
+// undefined payloads, malformed payloads, ok:false and probe errors all
+// deny — the claim is never registered or is withdrawn.
+// ---------------------------------------------------------------------------
+
+test('gate: ok:true with value:undefined at registration does not register /find', async () => {
+  const harness = makeRegistrationCtx()
+  harness.setCurrent('s1')
+  harness.queueListOutcome({ ok: true, value: undefined })
+  const disposer = await registerFindSource({ ctx: harness.ctx as never, controller: registrationController })
+  assert.equal(harness.registered.length, 0, 'unprovable catalog: no /find claim')
+  disposer()
+})
+
+test('gate: malformed payload at registration does not register /find and does not throw', async () => {
+  const harness = makeRegistrationCtx()
+  harness.setCurrent('s1')
+  harness.queueListOutcome({ ok: true, value: { items: [{ name: 'find' }] } })
+  const disposer = await registerFindSource({ ctx: harness.ctx as never, controller: registrationController })
+  assert.equal(harness.registered.length, 0, 'contract violation: no /find claim')
+  disposer()
+})
+
+test('gate: transient probe error withdraws a registered /find claim and a later valid catalog restores it', async () => {
+  const harness = makeRegistrationCtx()
+  harness.setCurrent('s1')
+  const disposer = await registerFindSource({ ctx: harness.ctx as never, controller: registrationController })
+  assert.equal(harness.registered.length, 1, 'starts registered on a valid catalog')
+
+  // Session event whose probe rejects (transport down): claim must withdraw.
+  harness.queueListOutcome(new Error('transport down'))
+  harness.emitSessionChange()
+  await new Promise(resolve => setTimeout(resolve, 20))
+  assert.equal(harness.unregisterCount, 1, 'probe error withdraws the registered claim')
+
+  // Next session event with a successful valid catalog lacking find: recover.
+  harness.emitSessionChange()
+  await new Promise(resolve => setTimeout(resolve, 20))
+  assert.equal(harness.registered.length, 2, 'valid catalog without find restores the claim')
+  disposer()
+  assert.equal(harness.unregisterCount, 2)
+})
+
+test('gate: repeated probe errors keep the claim withdrawn (stays withdrawn, no flapping)', async () => {
+  const harness = makeRegistrationCtx()
+  harness.setCurrent('s1')
+  const disposer = await registerFindSource({ ctx: harness.ctx as never, controller: registrationController })
+  harness.queueListOutcome(new Error('down'))
+  harness.emitSessionChange()
+  await new Promise(resolve => setTimeout(resolve, 20))
+  harness.queueListOutcome(new Error('still down'))
+  harness.emitSessionChange()
+  await new Promise(resolve => setTimeout(resolve, 20))
+  assert.equal(harness.unregisterCount, 1, 'already withdrawn: no duplicate unregister')
+  assert.equal(harness.registered.length, 1, 'no re-registration while the catalog stays broken')
+  disposer()
+})
+
+test('gate: probe error at registration does not register /find and does not throw', async () => {
+  const harness = makeRegistrationCtx()
+  harness.setCurrent('s1')
+  harness.queueListOutcome(new Error('transport down'))
+  const disposer = await registerFindSource({ ctx: harness.ctx as never, controller: registrationController })
+  assert.equal(harness.registered.length, 0, 'unprovable catalog: no /find claim')
+  disposer()
+})
+
+test('gate: ok:false at registration does not register /find and does not throw', async () => {
+  const harness = makeRegistrationCtx()
+  harness.setCurrent('s1')
+  harness.queueListOutcome({ ok: false, value: undefined })
+  const disposer = await registerFindSource({ ctx: harness.ctx as never, controller: registrationController })
+  assert.equal(harness.registered.length, 0, 'unavailable catalog: no /find claim')
+  disposer()
+})
+
+test('gate: undefined payload after registration withdraws the claim, valid catalog restores it', async () => {
+  const harness = makeRegistrationCtx()
+  harness.setCurrent('s1')
+  const disposer = await registerFindSource({ ctx: harness.ctx as never, controller: registrationController })
+  assert.equal(harness.registered.length, 1, 'starts registered on a valid catalog')
+
+  harness.queueListOutcome({ ok: true, value: undefined })
+  harness.emitSessionChange()
+  await new Promise(resolve => setTimeout(resolve, 20))
+  assert.equal(harness.unregisterCount, 1, 'undefined payload withdraws the registered claim')
+
+  harness.emitSessionChange()
+  await new Promise(resolve => setTimeout(resolve, 20))
+  assert.equal(harness.registered.length, 2, 'valid catalog without find restores the claim')
+  disposer()
+  assert.equal(harness.unregisterCount, 2)
+})
+
+test('gate: malformed payload after registration withdraws the claim', async () => {
+  const harness = makeRegistrationCtx()
+  harness.setCurrent('s1')
+  const disposer = await registerFindSource({ ctx: harness.ctx as never, controller: registrationController })
+  assert.equal(harness.registered.length, 1, 'starts registered on a valid catalog')
+
+  harness.queueListOutcome({ ok: true, value: null })
+  harness.emitSessionChange()
+  await new Promise(resolve => setTimeout(resolve, 20))
+  assert.equal(harness.unregisterCount, 1, 'malformed payload withdraws the registered claim')
+  assert.equal(harness.registered.length, 1, 'no re-registration while the payload stays malformed')
   disposer()
 })

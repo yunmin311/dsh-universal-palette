@@ -185,3 +185,46 @@ test('no startup row is a no-op: every rendered zero-session row produces an obs
   }
   assert.equal(modes.length + calls.length, 3, 'each startup row has a user-visible effect')
 })
+
+function commandRow(name: string) {
+  return {
+    item: {
+      id: `commands:${name}`, providerId: 'commands', kind: 'command' as const, title: `/${name}`,
+      context: { sessionId: 's1' }, primary: { id: 'execute', title: 'Execute', run: () => {} }, secondary: [],
+    },
+    score: 1, match: { score: 1, ranges: [] },
+  }
+}
+
+// Regression: prepareView compared the draft against the write-never
+// controller-level `query` field, so EVERY typed query rendered zero rows
+// (items: [] via pendingQuery) even after the aggregator settled. The gate
+// is the aggregator's live query.
+test('typed draft with a settled aggregator renders the ranked rows', () => {
+  const { ctx } = makeDriverCtx()
+  const view = prepareView(makeState({
+    draft: 'goal',
+    aggregator: { status: 'ready', query: 'goal', actionsHint: false, items: [commandRow('goal')], failures: [], seq: 2 },
+  }), {
+    ctx, hasSession: true,
+    workspaces: [{ workspaceId: 'w1', title: 'Alpha', path: 'E:/alpha' }],
+    t, setMode: () => {},
+  })
+  assert.equal(view.pendingQuery, false)
+  assert.equal(view.items.length, 1, 'settled typed query is not suppressed')
+  assert.equal(view.items[0]?.item.id, 'commands:goal')
+})
+
+test('draft ahead of the aggregator stays pending (rows withheld during debounce)', () => {
+  const { ctx } = makeDriverCtx()
+  const view = prepareView(makeState({
+    draft: 'goal',
+    aggregator: { status: 'loading', query: '', actionsHint: false, items: [], failures: [], seq: 2 },
+  }), {
+    ctx, hasSession: true,
+    workspaces: [{ workspaceId: 'w1', title: 'Alpha', path: 'E:/alpha' }],
+    t, setMode: () => {},
+  })
+  assert.equal(view.pendingQuery, true)
+  assert.equal(view.items.length, 0, 'unsettled draft withholds rows')
+})

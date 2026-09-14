@@ -47,7 +47,11 @@ export interface PreparedView {
 export function prepareView(state: SearchState, driver: SurfaceDriver): PreparedView {
   const mode = state.mode
   const draft = state.draft
-  const pendingQuery = state.query !== draft.trim().replace(/^>\s*/, '')
+  // Pending while the aggregator pipeline has not caught up with the draft.
+  // Compare against the aggregator's live query: the controller-level
+  // `query` field is write-never (draft is the single input source), so
+  // comparing against it would suppress every non-empty result list.
+  const pendingQuery = state.aggregator.query !== draft.trim().replace(/^>\s*/, '')
   const queryItems = state.aggregator.items
   const contextual = draft.trim() === '' && driver.hasSession && mode === 'all'
     ? contextualItems(queryItems as readonly RankedItem[])

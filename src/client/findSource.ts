@@ -52,16 +52,25 @@ export class PublicSlashFindCollision extends Error {
 }
 
 /**
- * A successful `commands.list` response whose payload does not match the
- * locked rc1 shape (`readonly CommandDescriptor[]`). Treated as fail-closed:
- * the catalog cannot be read, so the palette must not claim `/find`.
+ * Verdict of a `/find` collision probe. Strictly fail-closed: only a
+ * successful, contract-valid catalog that provably lacks exact `find`
+ * allows the claim. Everything else (host collision, ok:false, rejected
+ * probe, undefined or malformed payload) denies.
+ *
+ * `coldStart: true` marks the one state where no per-session catalog
+ * domain exists at all (`commands.list` is session-scoped by the rc1
+ * contract, so with no current session there is no host command catalog
+ * that could be shadowed). The claim must stay available there to keep
+ * hand-typed `/find` on a cold stock Hero claimed locally instead of
+ * leaking to the Agent.
  */
-export class HostCatalogContractError extends Error {
-  public readonly code = 'HOST_COMMAND_CATALOG_SHAPE' as const
-  constructor() {
-    super('Host command catalog returned a successful response with an unexpected shape; Universal Palette will not claim /find.')
+export type FindCollisionVerdict =
+  | { readonly kind: 'allow'; readonly coldStart: boolean }
+  | {
+    readonly kind: 'deny'
+    readonly reason: 'host-collision' | 'catalog-unavailable' | 'catalog-contract'
+    readonly collisions: readonly string[]
   }
-}
 
 /**
  * Real rc1 public contract face for the Host command catalog
@@ -73,27 +82,40 @@ type HostCommandsList =
 
 /**
  * Probe the Host command catalog for an exact `find` command name.
- * Returns the colliding command names (case-sensitive) or an empty
- * array when the catalog is empty / not yet loaded / unavailable.
- * A successful response whose payload is not the contracted descriptor
- * array throws `HostCatalogContractError` (fail closed: the catalog
- * cannot be read, so the palette must not claim `/find`).
+ * Allow ONLY on a successful response whose payload is the contracted
+ * descriptor array without `find`; every other outcome denies.
  */
-export async function findHostFindCollisions(ctx: Context): Promise<readonly string[]> {
+export async function findHostFindCollisions(ctx: Context): Promise<FindCollisionVerdict> {
   const current = ctx.sessions?.list?.getSnapshot?.()?.current
-  if (current === undefined) return []
+  if (current === undefined) return { kind: 'allow', coldStart: true }
   const remote = (ctx as unknown as { remote?: { commands?: { list?: HostCommandsList } } }).remote
   const list = remote?.commands?.list
-  if (typeof list !== 'function') return []
+  if (typeof list !== 'function') {
+    return { kind: 'deny', reason: 'catalog-unavailable', collisions: [] }
+  }
   let result: Awaited<ReturnType<HostCommandsList>>
   try {
     result = await list(current)
   } catch {
-    return []
+    return { kind: 'deny', reason: 'catalog-unavailable', collisions: [] }
   }
-  if (!result.ok || result.value === undefined) return []
-  if (!Array.isArray(result.value)) throw new HostCatalogContractError()
-  return result.value.filter(entry => entry?.name === 'find').map(entry => entry.name)
+  try {
+    if (result === null || typeof result !== 'object') {
+      return { kind: 'deny', reason: 'catalog-contract', collisions: [] }
+    }
+    if (!result.ok) return { kind: 'deny', reason: 'catalog-unavailable', collisions: [] }
+    if (result.value === undefined || !Array.isArray(result.value)) {
+      return { kind: 'deny', reason: 'catalog-contract', collisions: [] }
+    }
+    const collisions = result.value.filter(entry => entry?.name === 'find').map(entry => entry.name)
+    return collisions.length > 0
+      ? { kind: 'deny', reason: 'host-collision', collisions }
+      : { kind: 'allow', coldStart: false }
+  } catch {
+    // Any inspection failure (host returned a shape that throws on read)
+    // means the catalog cannot prove it lacks `find`: fail closed.
+    return { kind: 'deny', reason: 'catalog-contract', collisions: [] }
+  }
 }
 
 /**
@@ -198,9 +220,9 @@ export interface RegisterFindSourceOptions {
  *    re-probes the live public contract.
  */
 export async function registerFindSource(options: RegisterFindSourceOptions): Promise<() => void> {
-  const initialCollisions = await findHostFindCollisions(options.ctx)
-  if (initialCollisions.length > 0) {
-    throw makeFindCollision(initialCollisions)
+  const initial = await findHostFindCollisions(options.ctx)
+  if (initial.kind === 'deny' && initial.reason === 'host-collision') {
+    throw makeFindCollision(initial.collisions)
   }
   const open = () => {
     const id = options.ctx.sessions?.list?.getSnapshot?.()?.current
@@ -238,7 +260,23 @@ export async function registerFindSource(options: RegisterFindSourceOptions): Pr
       sourceDisposer = null
     }
   }
-  setRegistered(true)
+  // Fail-closed verdict handling: host collisions stay loud via the
+  // PublicSlashFindCollision message; unprovable catalogs (unavailable,
+  // contract violations) withdraw the claim and name the reason.
+  const logDenial = (verdict: Extract<FindCollisionVerdict, { kind: 'deny' }>): void => {
+    if (verdict.reason === 'host-collision') {
+      // eslint-disable-next-line no-console
+      console.error('[dsh-universal-palette]', makeFindCollision(verdict.collisions).message)
+    } else if (verdict.reason === 'catalog-contract') {
+      // eslint-disable-next-line no-console
+      console.error('[dsh-universal-palette] /find collision probe: host catalog payload is not the contracted CommandDescriptor array; /find claim withdrawn (fail-closed).')
+    } else {
+      // eslint-disable-next-line no-console
+      console.error('[dsh-universal-palette] /find collision probe: host command catalog unavailable; /find claim withdrawn (fail-closed).')
+    }
+  }
+  if (initial.kind === 'deny') logDenial(initial)
+  setRegistered(initial.kind === 'allow')
   const list = options.ctx.sessions?.list
   let offSessions: (() => void) | undefined
   // Every session change starts its own probe; only the LATEST event's
@@ -250,13 +288,14 @@ export async function registerFindSource(options: RegisterFindSourceOptions): Pr
       if (disposed) return
       const seq = ++probeSeq
       void findHostFindCollisions(options.ctx)
-        .then(collisions => {
+        .then(verdict => {
           if (disposed || seq !== probeSeq) return
-          setRegistered(collisions.length === 0)
+          if (verdict.kind === 'deny') logDenial(verdict)
+          setRegistered(verdict.kind === 'allow')
         })
         .catch(error => {
-          // Includes HostCatalogContractError: an unreadable catalog must
-          // fail closed (withdraw the claim) and stay loud.
+          // Defensive: the probe resolves verdicts and never rejects; if
+          // that invariant ever breaks, fail closed and stay loud.
           if (disposed || seq !== probeSeq) return
           setRegistered(false)
           // eslint-disable-next-line no-console
