@@ -342,3 +342,65 @@ test('STOCK Hero: matchSpace claim still fires so Space selection cannot leak to
   const settlement = await out.claim.submit('query', {} as never, [])
   assert.equal(settlement.kind, 'error')
 })
+
+
+test('rapid session changes: the newest session verdict wins even if an older probe resolves later', async () => {
+  // Regression: the old `probing` flag dropped session events that arrived
+  // while a probe was in flight, so a stale (older session) verdict could
+  // win. Each event must start its own probe and only the LATEST event's
+  // verdict may be applied.
+  const pending: Array<(value: { ok: boolean; value?: readonly { name: string; description: string }[] }) => void> = []
+  const listSubscribers: Array<() => void> = []
+  let current: string | undefined
+  let unregisterCount = 0
+  const registered: unknown[] = []
+  const ctx = {
+    sessions: {
+      list: {
+        getSnapshot: () => ({ current }),
+        subscribe(fn: () => void) { listSubscribers.push(fn); return () => {} },
+      },
+    },
+    remote: {
+      commands: {
+        // Manual gates: each probe's result is released explicitly.
+        list: () => new Promise(resolve => { pending.push(resolve) }),
+      },
+    },
+    inputTriggers: {
+      registerSource: () => {
+        registered.push(1)
+        return () => { unregisterCount++ }
+      },
+    },
+    effect(fn: () => unknown) {
+      const cleanup = fn()
+      return () => { if (typeof cleanup === 'function') (cleanup as () => void)() }
+    },
+  } as never
+  const emit = () => { for (const fn of [...listSubscribers]) fn() }
+  const disposer = await registerFindSource({ ctx, controller: { openComposerSearch: () => {} } as never })
+  assert.equal(registered.length, 1, 'cold start registers')
+
+  // Session A appears: host catalog for A has no find (probe 1, held open).
+  current = 'sA'
+  emit()
+  assert.equal(pending.length, 1, 'probe 1 started for session A')
+
+  // Session B appears before probe 1 resolves; B's catalog owns find.
+  current = 'sB'
+  emit()
+  assert.ok(pending.length >= 2, 'a new probe started for session B (no dropped events)')
+
+  // B's verdict resolves first: claim withdrawn.
+  pending[pending.length - 1]!({ ok: true, value: [{ name: 'find', description: 'Host find' }] })
+  await new Promise(resolve => setTimeout(resolve, 10))
+  assert.equal(unregisterCount, 1, 'B owns find: palette claim withdrawn')
+
+  // A's stale verdict resolves afterwards: it must NOT re-register.
+  pending[0]!({ ok: true, value: [] })
+  await new Promise(resolve => setTimeout(resolve, 10))
+  assert.equal(unregisterCount, 1, 'stale session A verdict ignored')
+  assert.equal(registered.length, 1, 'no duplicate registration from stale probes')
+  disposer()
+})

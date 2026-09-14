@@ -117,6 +117,10 @@ test('superseded query: only the newest query publishes, even when the old one d
 })
 
 test('dispose during an in-flight query: no late publish and pending debounce timer is silenced', async () => {
+  // Strict sequence assertions: the ONLY publishes allowed are the initial
+  // subscribe snapshot and the loading state. A leaked debounce publish, a
+  // leaked deadline publish or a late provider publish all change the
+  // sequence and fail.
   const agg = new PaletteAggregator({
     providers: [provider('hung', null, ['never-published'])],
     preferences: prefs,
@@ -124,20 +128,22 @@ test('dispose during an in-flight query: no late publish and pending debounce ti
     debounceMs: 15,
   })
   const published: string[] = []
-  agg.subscribe(state => { published.push(state.query) })
+  agg.subscribe(state => { published.push(state.query) }) // initial snapshot: ''
   agg.setQuery('quick') // starts the debounce timer only
   agg.dispose() // must clear the pending debounce timer
   await new Promise(resolve => setTimeout(resolve, DEADLINE + 100))
-  assert.ok(!published.includes('typed'), 'disposed aggregator must not publish the debounced query')
-  // In-flight runQuery started directly must also stay silent after dispose.
-  const agg2 = makeAggregator([provider('hung', null, ['x'])])
+  assert.deepEqual(published, [''], 'disposed aggregator must not publish the debounced query')
+
+  // In-flight query whose provider would contribute items only after the
+  // deadline: dispose must silence the deadline publish AND the late data.
+  const agg2 = makeAggregator([provider('slow', 200, ['late-item'])])
   const states: number[] = []
-  agg2.subscribe(state => { states.push(state.items.length) })
-  const inflight = agg2.runQuery('q')
+  agg2.subscribe(state => { states.push(state.items.length) }) // initial snapshot: 0
+  const inflight = agg2.runQuery('quick') // loading publish: 0
   agg2.dispose()
   await inflight
-  await new Promise(resolve => setTimeout(resolve, DEADLINE + 100))
-  assert.ok(!states.includes(1), 'no result publish after dispose')
+  await new Promise(resolve => setTimeout(resolve, DEADLINE + 200 + 100))
+  assert.deepEqual(states, [0, 0], 'neither a deadline publish nor late provider data may land after dispose')
 })
 
 test('failure isolation under the deadline: throwing and hanging providers do not lose fast results', async () => {

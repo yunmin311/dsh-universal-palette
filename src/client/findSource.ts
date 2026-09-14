@@ -228,7 +228,6 @@ export async function registerFindSource(options: RegisterFindSourceOptions): Pr
   }
   let sourceDisposer: (() => void) | null = null
   let disposed = false
-  let probing = false
   const setRegistered = (registered: boolean) => {
     if (disposed) return
     if (registered && sourceDisposer === null) {
@@ -242,21 +241,23 @@ export async function registerFindSource(options: RegisterFindSourceOptions): Pr
   setRegistered(true)
   const list = options.ctx.sessions?.list
   let offSessions: (() => void) | undefined
+  // Every session change starts its own probe; only the LATEST event's
+  // verdict is applied (a generation token discards stale resolutions), so
+  // a slow probe for an older session can never mask a newer collision.
+  let probeSeq = 0
   if (list && typeof list.subscribe === 'function') {
     offSessions = list.subscribe(() => {
-      if (probing || disposed) return
-      probing = true
+      if (disposed) return
+      const seq = ++probeSeq
       void findHostFindCollisions(options.ctx)
         .then(collisions => {
-          probing = false
-          if (disposed) return
+          if (disposed || seq !== probeSeq) return
           setRegistered(collisions.length === 0)
         })
         .catch(error => {
           // Includes HostCatalogContractError: an unreadable catalog must
           // fail closed (withdraw the claim) and stay loud.
-          probing = false
-          if (disposed) return
+          if (disposed || seq !== probeSeq) return
           setRegistered(false)
           // eslint-disable-next-line no-console
           console.error('[dsh-universal-palette] /find collision probe failed:', error)
