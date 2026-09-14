@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/@yunmin311/dsh-universal-palette.svg)](https://www.npmjs.com/package/@yunmin311/dsh-universal-palette)
 [![GitHub release](https://img.shields.io/github/v/release/yunmin311/dsh-universal-palette.svg)](https://github.com/yunmin311/dsh-universal-palette/releases)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![DSH](https://img.shields.io/badge/DSH-0.1.2--rc.1-2962ff.svg)](docs/COMPATIBILITY.md)
+[![DSH](https://img.shields.io/badge/DSH-0.1.2--rc.1%2C%200.1.5--rc.1-2962ff.svg)](docs/COMPATIBILITY.md)
 [![node](https://img.shields.io/node/v/%40yunmin311/dsh-universal-palette.svg)](package.json)
 [![CI](https://github.com/yunmin311/dsh-universal-palette/actions/workflows/ci.yml/badge.svg)](https://github.com/yunmin311/dsh-universal-palette/actions/workflows/ci.yml)
 
@@ -34,7 +34,7 @@ It is built to stay out of the way: DSH's own design tokens, glass over the nati
 ## Quick Start
 
 ```powershell
-dsh plugin --profile web add @yunmin311/dsh-universal-palette@0.2.0
+dsh plugin --profile web add @yunmin311/dsh-universal-palette@0.2.1
 dsh --profile web
 ```
 
@@ -120,11 +120,36 @@ Universal Palette currently has no Provider SDK, and none is planned. The prefer
 
 ## Compatibility
 
-Verified and locked against `@deepseek-ai/dsh@0.1.2-rc.1` (`deepseek-ai/deepseek-harness@76fda729799fe9b3848dbe2c211d4b231032b81e`). Other DSH revisions are unverified. Details: [COMPATIBILITY.md](docs/COMPATIBILITY.md), [COMMAND_COMPATIBILITY.md](docs/COMMAND_COMPATIBILITY.md).
+Verified against:
+- `@deepseek-ai/dsh@0.1.2-rc.1` (baseline, `deepseek-ai/deepseek-harness@76fda729799fe9b3848dbe2c211d4b231032b81e`)
+- `@deepseek-ai/dsh@0.1.5-rc.1` (API drift verified; compatible seams only)
 
-On the locked DSH `0.1.2-rc.1` Hero surface, session-scoped Composer Morph outlets are not mounted, and stock `0.1.2-rc.1` does not expose the `conversation.hero.composer.dock` seat. Composer Search therefore **fails closed** on the Hero surface: the Search button is disabled, the native slash menu withholds the `/find` candidate, and a hand-typed `/find …` is still claimed but answers with a localized capability error instead of ever reaching the Agent or presenting an upward Morph. Active-session Composer Search and the Global Floating palette (`Alt+Q`) are unaffected.
+Other DSH revisions are unverified. Details: [COMPATIBILITY.md](docs/COMPATIBILITY.md), [COMMAND_COMPATIBILITY.md](docs/COMMAND_COMPATIBILITY.md).
 
-The Hero downward presentation is enabled on hosts that declare `conversation.hero.composer.dock`. The fully verified host is the maintainer's enhanced fork (`yunmin311/deepseek-harness`, branch `feat/hero-composer-dock`); this is not upstream support, and the fork is maintained as the long-term enhanced host for the full Hero experience.
+### 0.1.5-rc.1 API drift (does not affect Universal Palette)
+
+The Palette consumes only the following public Client seams; these are **compatible** between 0.1.2-rc.1 and 0.1.5-rc.1:
+
+- `ctx.remote.commands.list` — unchanged array shape
+- `ctx.sessions.list / binding / search / open` — unchanged shapes
+- `ctx.workspaces.list / create` — unchanged
+- `ctx.modelDirectories.directoryFor / load / select` — unchanged
+- `ctx.inputTriggers.registerSource / sessionOf / adjudicate` — envelope field renamed `images`→`attachments` (Palette does not submit images)
+- `ctx.slots.spec / subscribe / inject / register` — unchanged names for `shell.overlay`, `conversation.input.left`, `conversation.input.overlay`, `conversation.hero.composer.dock`, `conversation.composer.dock`, `sidebar.footer.action`
+- `locale`, `plugin lifecycle` — unchanged
+
+Breaking changes in 0.1.5 (e.g. `commands.execute` 3rd param `images`→`attachments`, session format V3, wire `seedLength`→`isSeeded`, history events restructure) do not intersect the Palette's call surface.
+
+### Hero surface
+
+- Stock `0.1.2-rc.1` / `0.1.5-rc.1`: no `conversation.hero.composer.dock` → Composer Search **fails closed** (Search button disabled with reason; `/find` claimed but answers capability error; no upward fallback).
+- Enhanced Hero experience (downward Morph) requires a host that declares `conversation.hero.composer.dock`. The verified host is the maintainer's fork (`yunmin311/deepseek-harness`, branch `feat/hero-composer-dock` at SHA `321bf88d10e0176674226d02de59d3e0bd79579d`). This is **not upstream support**; the fork is maintained as the long-term enhanced host for the full Hero experience.
+
+### Desktop
+
+- No official DeepSeek Desktop installer is published. The upstream repo contains Desktop packaging infrastructure (`apps/desktop` Electron shell + `apps/desktop-host`), but no installers are available on `https://download.deepseek.com/_/harness/desktop/stable/...` (404 at review time).
+- Community wrappers (Electron/Tauri/Wails shells bundling stock `dsh web`) exist but are **not in the verified matrix**.
+- `deepseekagent.io` / third-party sites are not official DeepSeek products.
 
 ## Privacy & Security
 
